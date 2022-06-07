@@ -1,0 +1,14 @@
+# Name of default conda environment for all tasks
+conda_base_env: 'trna'
+
+# Directory for input files
+input: './input'
+
+simulation:
+
+  # How many iterations per simulation (note that uniform is only done once)
+  n: 20
+
+  # Uniform (same counts per tRNA sequence) simulation
+  uniform_reads: 1000000
+  withmut_reads: 1000000
