@@ -42,6 +42,8 @@ from ruffus import *
 import sys
 import os
 
+import pandas as pd
+
 import pickle
 # import re
 # import shutil
@@ -60,6 +62,7 @@ import cgatcore.iotools as iotools
 import simulatetrna.alignmentSummary as alignmentSummary
 import simulatetrna.simulateReads as simulateReads
 import simulatetrna.fasta as fasta
+import simulatetrna.bam as bam
 
 import PipelineCompareTrnaSeq as CompareTrnaSeq
 # load options from the config file
@@ -123,8 +126,29 @@ def buildBWAIndex(infile, outfile):
     P.run(statement, submit=False)
 
 
+@transform(santitisetRNAsequences,
+           regex('trna_sequences.dir/(\S+).sanitised.fa'),
+           r'trna_sequences.dir/\1.sanitised.fa.1.bt2')
+def buildBowtie2Index(infile, outfile):
+    'Index the tRNA sequences for Bowtie2'
+
+    outfile_base = iotools.snip(outfile, '.1.bt2')
+    statement = 'bowtie2-build %(infile)s %(outfile_base)s' % locals()
+
+    # Very small task so running locally is OK, even on HPC!
+    P.run(statement, submit=False)
 
 
+@transform(santitisetRNAsequences,
+           regex('trna_sequences.dir/(\S+).sanitised.fa'),
+           r'trna_sequences.dir/\1.sanitised.fa.idx')
+def buildSegemehlIndex(infile, outfile):
+    'Index the tRNA sequences for Segemehl'
+
+    statement = 'segemehl.x -x %(outfile)s -d %(infile)s' % locals()
+
+    # Very small task so running locally is OK, even on HPC!
+    P.run(statement, submit=False)
 ###################################################
 # Learn mutation and truncation signatures
 ###################################################
@@ -134,7 +158,7 @@ print(SEQUENCEFILES)
 @transform(SEQUENCEFILES,
            SEQUENCEFILES_REGEX,
            add_inputs(buildBWAIndex),
-           r"mut_trunc_sig.dir/\2.bam")
+           r"mut_trunc_sig.dir/\2_bwaMemReportSingle.bam")
 def mapWithBWAMEMSingleReport(infiles, outfile):
     '''
     Map reads to the tRNA sequences, reporting only one alignment per read
@@ -146,7 +170,10 @@ def mapWithBWAMEMSingleReport(infiles, outfile):
     tmp_file = P.get_temp_filename()
 
     statement = '''
-    bwa mem %(bwa_index)s %(infile)s > %(tmp_file)s 2> %(outfile)s.log;
+    bwa mem -k 10 -T 15
+    %(bwa_index)s %(infile)s
+    > %(tmp_file)s 2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
     samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
     samtools index %(outfile)s;
     rm -f %(tmp_file)s
@@ -155,14 +182,109 @@ def mapWithBWAMEMSingleReport(infiles, outfile):
     P.run(statement)
 
 
-@transform(mapWithBWAMEMSingleReport,
+@mkdir('mut_trunc_sig.dir')
+@transform(SEQUENCEFILES,
+           SEQUENCEFILES_REGEX,
+           add_inputs(buildBowtie2Index),
+           r"mut_trunc_sig.dir/\2_bowtie2ReportSingle.bam")
+def mapWithBowtie2SingleReport(infiles, outfile):
+    '''
+    Map reads to the tRNA sequences, reporting only one alignment per read
+    '''
+    infile, bowtie2_index = infiles
+
+    bowtie2_index = iotools.snip(bowtie2_index, '.1.bt2')
+
+    tmp_file = P.get_temp_filename()
+
+    statement = '''
+    bowtie2
+    --min-score G,1,8
+    --local
+    -D 20 -R 3 -N 1 -L 10
+    -i S,1,0.5
+    -x %(bowtie2_index)s
+    -U %(infile)s
+    -S %(tmp_file)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
+    samtools index %(outfile)s;
+    rm -f %(tmp_file)s
+    ''' % locals()
+
+    P.run(statement)
+
+@mkdir('mut_trunc_sig.dir')
+@transform(SEQUENCEFILES,
+           SEQUENCEFILES_REGEX,
+           add_inputs(buildSegemehlIndex, santitisetRNAsequences),
+           r"mut_trunc_sig.dir/\2_SegemehlReportSingle.bam")
+def mapWithSegemehlSingleReport(infiles, outfile):
+    '''
+    Map reads to the tRNA sequences, reporting only one alignment per read
+    '''
+
+    infile, segemehl_index, trna_fasta = infiles
+
+    tmp_file = P.get_temp_filename()
+
+    statement = '''
+    segemehl.x
+    -A 85 -E 500 -r 1
+    -i %(segemehl_index)s
+    -d %(trna_fasta)s
+    -q %(infile)s
+    > %(tmp_file)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
+    samtools index %(outfile)s;
+    rm -f %(tmp_file)s
+    ''' % locals()
+
+    P.run(statement)
+
+@collate((mapWithBWAMEMSingleReport,
+          mapWithBowtie2SingleReport,
+          mapWithSegemehlSingleReport),
+       regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|bwaMemReportSingle|SegemehlReportSingle).bam'),
+       r'mut_trunc_sig.dir/\1.merged.bam')
+def mergeSingleReports(infiles, outfile):
+
+    infiles = ' '.join(infiles)
+
+    statement = '''
+    samtools merge -f -o %(outfile)s %(infiles)s;
+    samtools index %(outfile)s
+    ''' % locals()
+
+    P.run(statement)
+
+@transform((mapWithBWAMEMSingleReport,
+            mapWithBowtie2SingleReport,
+            mapWithSegemehlSingleReport),
            suffix('.bam'),
            add_inputs(santitisetRNAsequences),
            '.summariseAlignments.pickle')
-def summariseAlignments(infiles, outfile):
+def summariseIndividualAlignments(infiles, outfile):
     '''
     Use alignmentSummary.clustalwtrnaAlignmentSummary class to summarise the
     alignments and learn the mutational & truncation signatures
+    '''
+
+    infile, trna_fasta = infiles
+
+    CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
+
+@transform(mergeSingleReports,
+           suffix('.bam'),
+           add_inputs(santitisetRNAsequences),
+           '.summariseAlignments.pickle')
+def summariseMergedAlignments(infiles, outfile):
+    '''
+    Use alignmentSummary.clustalwtrnaAlignmentSummary class to summarise the
+    merged alignments and learn the mutational & truncation signatures
     '''
 
     infile, trna_fasta = infiles
@@ -211,7 +333,7 @@ def simulation_uniform_no_errors(infile, outfile):
 @mkdir('simulations.dir')
 @transform(create_files,
            regex('simulation_dummy_files/(\d+)'),
-           add_inputs(summariseAlignments, santitisetRNAsequences),
+           add_inputs(summariseMergedAlignments, santitisetRNAsequences),
            r'simulations.dir/\1.simulation_withseqer.fastq.gz')
 def simulation_with_sequencing_errors(infiles, outfile):
 
@@ -245,7 +367,7 @@ def simulation_with_sequencing_errors(infiles, outfile):
 @mkdir('simulations.dir')
 @transform(create_files,
            regex('simulation_dummy_files/(\d+)'),
-           add_inputs(summariseAlignments, santitisetRNAsequences),
+           add_inputs(summariseMergedAlignments, santitisetRNAsequences),
            r'simulations.dir/\1.simulation_withmut.fastq.gz')
 def simulation_with_mutation_errors(infiles, outfile):
 
@@ -278,7 +400,7 @@ def simulation_with_mutation_errors(infiles, outfile):
 @mkdir('simulations.dir')
 @transform(create_files,
            regex('simulation_dummy_files/(\d+)'),
-           add_inputs(summariseAlignments, santitisetRNAsequences),
+           add_inputs(summariseMergedAlignments, santitisetRNAsequences),
            r'simulations.dir/\1.simulation_withtrunc.fastq.gz')
 def simulation_with_truncations(infiles, outfile):
 
@@ -317,74 +439,173 @@ def simulation_with_truncations(infiles, outfile):
             simulation_with_sequencing_errors,
             simulation_with_mutation_errors,
             simulation_with_truncations),
+# @transform(simulation_uniform_no_errors,
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBWAIndex),
-           r'quant.dir/\1.\2.')
-def quantWithBWASalmon(infiles, outfile):
+           r'quant.dir/\1.\2.bwa.bam')
+def alignWithBWA(infiles, outfile):
 
-    infile, bwa_index = infiles
-
-    bwa_index = iotools.snip(bwa_index, '.bwt')
-
-
-    statement ='bwa mem -a %(bwa_index)s %(infile)s > %(tmp_file)s 2> %(outfile)s.log;'
-
-    P.run(statement)
-
-    
-
-@mkdir('mut_trunc_sig.dir')
-@transform(SEQUENCEFILES,
-           SEQUENCEFILES_REGEX,
-           add_inputs(buildBWAIndex),
-           r"mut_trunc_sig.dir/\2.bam")
-def mapWithBWAMEMSingleReport(infiles, outfile):
-    '''
-    Map reads to the tRNA sequences, reporting only one alignment per read
-    '''
-    infile, bwa_index = infiles
+    infile, bwa_index= infiles
 
     bwa_index = iotools.snip(bwa_index, '.bwt')
 
     tmp_file = P.get_temp_filename()
 
     statement = '''
-    bwa mem %(bwa_index)s %(infile)s > %(tmp_file)s 2> %(outfile)s.log;
-    samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
-    samtools index %(outfile)s;
-    rm -f %(tmp_file)s
-    ''' % locals()
+    bwa mem
+    -k 10
+    -a
+    %(bwa_index)s
+    %(infile)s
+    > %(tmp_file)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    '''
 
     P.run(statement)
 
+    bam.filter_sam(tmp_file, outfile)
+
+    os.unlink(tmp_file)
+
+
+@mkdir('quant.dir')
+@transform((simulation_uniform_no_errors,
+            simulation_with_sequencing_errors,
+            simulation_with_mutation_errors,
+            simulation_with_truncations),
+# @transform(simulation_uniform_no_errors,
+           regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
+           add_inputs(buildBWAIndex),
+           r'quant.dir/\1.\2.bowtie2.bam')
+def alignWithBowtie2(infiles, outfile):
+
+    infile, bowtie2_index = infiles
+
+    bowtie2_index = iotools.snip(bowtie2_index, '.1.bt2')
+
+    tmp_file = P.get_temp_filename()
+
+    # -a = report all alignments
+    statement = '''
+    bowtie2
+    --min-score G,1,8
+    --local
+    -a
+    -D 20 -R 3 -N 1 -L 10
+    -i S,1,0.5
+    -x %(bowtie2_index)s
+    -U %(infile)s
+    -S %(tmp_file)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    ''' % locals()
+
+    bam.filter_sam(tmp_file, outfile)
+
+    os.unlink(tmp_file)
+
+@mkdir('quant.dir')
+@transform((alignWithBWA,
+            alignWithBowtie2),
+           regex('quant.dir/(\S+).(simulation_\S+).(\S+).bam'),
+           add_inputs(santitisetRNAsequences),
+           r'quant.dir/\1.\2.\3/quant.sf')
+def quantWithSalmon(infiles, outfile):
+
+    infile, trna_fasta = infiles
+
+    outfile_dir = os.path.dirname(outfile)
+
+    if not os.path.exists(outfile_dir):
+        os.makedirs(outfile_dir)
+
+    statement = '''
+    salmon quant -t
+    %(trna_fasta)s
+    -l A
+    -a %(infile)s
+    -o %(outfile_dir)s;
+    '''
+
+    P.run(statement)
+
+
 ###################################################
-# Meta-task targets
+# compare
+###################################################
+@collate(quantWithSalmon,
+       regex(r'quant.dir/(\S+).(simulation_\S+)/quant.sf'),
+       add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
+       r'quant.dir/\2.compareTruthEstimate.tsv')
+def compareTruthEstimateSalmon(infiles, outfile):
+
+    all_counts_vs_truth = []
+    for infile_pair in infiles:
+        estimate, truth = infile_pair
+        simulation_n = os.path.basename(truth).split('.')[0]
+        print(estimate, truth)
+        estimate_counts = pd.read_csv(estimate, sep='\t')[['Name', 'NumReads']]
+        truth_counts = pd.read_csv(truth, sep='\t', header=None,
+                                   names=['Name', 'truth'])
+        print(truth)
+        counts_vs_truth = pd.merge(estimate_counts, truth_counts, on='Name')
+
+        counts_vs_truth['simulation_n']=simulation_n
+        all_counts_vs_truth.append(counts_vs_truth)
+
+    all_counts_vs_truth = pd.concat(all_counts_vs_truth)
+    all_counts_vs_truth.to_csv(outfile, sep='\t', index=False)
+###################################################
+# Targets
 ###################################################
 
-# build_input =  prepare inputs
 @follows(buildBWAIndex)
 def build_input():
+    'prepare inputs'
     pass
 
-# summarise_alignments = learn the mutation & truncation signatures
-@follows(summariseAlignments)
+
+@follows(summariseMergedAlignments)
 def summarise_alignments():
+    'learn the mutation & truncation signatures'
     pass
 
-# simulate = simulate tRNA reads from basic to more realistic
+
 @follows(simulation_uniform_no_errors,
          simulation_with_sequencing_errors,
          simulation_with_mutation_errors,
          simulation_with_truncations)
 def simulate():
+    'simulate tRNA reads from basic to more realistic'
     pass
 
-simulation_uniform_no_errors
 
-# full = run it all!
-@follows(summariseAlignments)
+@follows(summariseIndividualAlignments,
+         summariseMergedAlignments)
+def summariseAlignments():
+    'summarise the alignments with real reads'
+    pass
+
+
+@follows(quantWithSalmon)
+def quant():
+    'Quantify from the simulated reads'
+    pass
+
+@follows(compareTruthEstimateSalmon)
+def compare():
+    'compare observed and ground truth'
+    pass
+
+@follows(summariseAlignments,
+         quant,
+         compare)
 def full():
+    'run it all!'
     pass
+
+
 ###################################################
 # Making pipline command-line friendly
 ###################################################
