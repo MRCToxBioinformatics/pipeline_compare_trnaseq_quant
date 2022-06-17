@@ -245,9 +245,11 @@ def mapWithSegemehlSingleReport(infiles, outfile):
 
     P.run(statement)
 
+# @collate((mapWithBWAMEMSingleReport,
+#           mapWithBowtie2SingleReport,
+#           mapWithSegemehlSingleReport),
 @collate((mapWithBWAMEMSingleReport,
-          mapWithBowtie2SingleReport,
-          mapWithSegemehlSingleReport),
+          mapWithBowtie2SingleReport),
        regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|bwaMemReportSingle|SegemehlReportSingle).bam'),
        r'mut_trunc_sig.dir/\1.merged.bam')
 def mergeSingleReports(infiles, outfile):
@@ -261,9 +263,11 @@ def mergeSingleReports(infiles, outfile):
 
     P.run(statement)
 
+# @transform((mapWithBWAMEMSingleReport,
+#             mapWithBowtie2SingleReport,
+#             mapWithSegemehlSingleReport),
 @transform((mapWithBWAMEMSingleReport,
-            mapWithBowtie2SingleReport,
-            mapWithSegemehlSingleReport),
+            mapWithBowtie2SingleReport),
            suffix('.bam'),
            add_inputs(santitisetRNAsequences),
            '.summariseAlignments.pickle')
@@ -476,7 +480,7 @@ def alignWithBWA(infiles, outfile):
             simulation_with_truncations),
 # @transform(simulation_uniform_no_errors,
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
-           add_inputs(buildBWAIndex),
+           add_inputs(buildBowtie2Index),
            r'quant.dir/\1.\2.bowtie2.bam')
 def alignWithBowtie2(infiles, outfile):
 
@@ -501,14 +505,33 @@ def alignWithBowtie2(infiles, outfile):
     samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
     ''' % locals()
 
+    P.run(statement)
+
     bam.filter_sam(tmp_file, outfile)
 
     os.unlink(tmp_file)
 
-@mkdir('quant.dir')
+
 @transform((alignWithBWA,
             alignWithBowtie2),
-           regex('quant.dir/(\S+).(simulation_\S+).(\S+).bam'),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           [r'quant.dir/\1.\2.\3.gene_count_individual',
+           r'quant.dir/\1.\2.\3.gene_count_isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_anticodon'])
+def quantDiscreteCounts(infile, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    CompareTrnaSeq.tally_read_counts(
+    bam_infile,
+    outfile_individual,
+    outfile_isodecoder,
+    outfile_anticodon,
+    submit=True)
+
+@transform((alignWithBWA,
+            alignWithBowtie2),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(santitisetRNAsequences),
            r'quant.dir/\1.\2.\3/quant.sf')
 def quantWithSalmon(infiles, outfile):
