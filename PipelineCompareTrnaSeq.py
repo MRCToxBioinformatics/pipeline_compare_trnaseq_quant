@@ -1,6 +1,9 @@
 import simulatetrna.alignmentSummary as alignmentSummary
 import simulatetrna.bam as bam
 from cgatcore.pipeline import cluster_runnable
+import pysam
+from collections import Counter
+import pandas as pd
 
 @cluster_runnable
 def summariseAlignments(infile, trna_fasta, outfile):
@@ -34,9 +37,9 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
             continue
 
         # Just one assigned gene
-        if len(assignments)==0:
+        if len(assignments) == 1:
             assignment = assignments.pop()
-            read_counts['individual_sequence'][assignment] +=1
+            read_counts['individual_sequence'][assignment] += 1
             read_counts['anticodon']['-'.join(assignment.split('-')[0:3])] +=1
             read_counts['isodecoder']['-'.join(assignment.split('-')[0:4])] +=1
 
@@ -62,3 +65,13 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
     with open(outfile_anticodon, 'w') as outf:
         for k,v in read_counts['anticodon'].items():
             outf.write(k + '\t' + str(v) + '\n')
+
+
+def mergeDiscreteEstimateWithTruth(truth, estimate_infile, simulation_n, quant_method):
+    estimate_counts = pd.read_csv(estimate_infile , sep='\t', header=None,
+                                  names=['Name', 'NumReads'])
+    counts_vs_truth = pd.merge(estimate_counts, truth, on='Name')
+
+    counts_vs_truth['simulation_n']=simulation_n
+    counts_vs_truth['quant_method']=quant_method
+    return(counts_vs_truth)

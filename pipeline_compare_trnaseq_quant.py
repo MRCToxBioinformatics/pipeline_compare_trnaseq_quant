@@ -334,6 +334,7 @@ def simulation_uniform_no_errors(infile, outfile):
         summary_level='anticodon')
 
 
+#### HERE!! Needs update so simulate from each input file, e.g not transform but combination of dummy file and summarisedMergedAlignments ###
 @mkdir('simulations.dir')
 @transform(create_files,
            regex('simulation_dummy_files/(\d+)'),
@@ -458,6 +459,7 @@ def alignWithBWA(infiles, outfile):
     statement = '''
     bwa mem
     -k 10
+    -T 15
     -a
     %(bwa_index)s
     %(infile)s
@@ -523,7 +525,7 @@ def quantDiscreteCounts(infile, outfiles):
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
     CompareTrnaSeq.tally_read_counts(
-    bam_infile,
+    infile,
     outfile_individual,
     outfile_isodecoder,
     outfile_anticodon,
@@ -558,27 +560,111 @@ def quantWithSalmon(infiles, outfile):
 # compare
 ###################################################
 @collate(quantWithSalmon,
-       regex(r'quant.dir/(\S+).(simulation_\S+)/quant.sf'),
+       regex(r'quant.dir/(\S+).(simulation_\S+)\.(\S+)/quant.sf'),
        add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
-       r'quant.dir/\2.compareTruthEstimate.tsv')
-def compareTruthEstimateSalmon(infiles, outfile):
+       [r'quant.dir/\2.SalmonCompareTruthEstimate.tsv',
+        r'quant.dir/\2.SalmonCompareTruthEstimateIsodecoder.tsv',
+        r'quant.dir/\2.SalmonCompareTruthEstimateAnticodon.tsv'])
+def compareTruthEstimateSalmon(infiles, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
     all_counts_vs_truth = []
+
     for infile_pair in infiles:
+
         estimate, truth = infile_pair
-        simulation_n = os.path.basename(truth).split('.')[0]
-        print(estimate, truth)
+
         estimate_counts = pd.read_csv(estimate, sep='\t')[['Name', 'NumReads']]
         truth_counts = pd.read_csv(truth, sep='\t', header=None,
                                    names=['Name', 'truth'])
-        print(truth)
+
         counts_vs_truth = pd.merge(estimate_counts, truth_counts, on='Name')
 
+        simulation_n = os.path.basename(truth).split('.')[0]
         counts_vs_truth['simulation_n']=simulation_n
+
+        quant_method = os.path.dirname(estimate).split('.')[-1] + '_salmon'
+        counts_vs_truth['quant_method']=quant_method
+
         all_counts_vs_truth.append(counts_vs_truth)
 
     all_counts_vs_truth = pd.concat(all_counts_vs_truth)
-    all_counts_vs_truth.to_csv(outfile, sep='\t', index=False)
+    all_counts_vs_truth.to_csv(outfile_individual, sep='\t', index=False)
+
+    all_counts_vs_truth['Name'] = ['-'.join(x.split('-')[0:4]) for x in all_counts_vs_truth.Name]
+    all_counts_vs_truth_isodecoder = all_counts_vs_truth.groupby(
+        ['Name', 'simulation_n', 'quant_method']).agg(
+            {'NumReads':'sum', 'truth':'sum'}).reset_index()
+    all_counts_vs_truth_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
+
+    all_counts_vs_truth['Name'] = ['-'.join(x.split('-')[0:3]) for x in all_counts_vs_truth.Name]
+    all_counts_vs_truth_ac = all_counts_vs_truth.groupby(
+        ['Name', 'simulation_n', 'quant_method']).agg(
+            {'NumReads':'sum', 'truth':'sum'}).reset_index()
+    all_counts_vs_truth_ac.to_csv(outfile_anticodon, sep='\t', index=False)
+
+
+
+
+
+@collate(quantDiscreteCounts,
+         regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).gene_count_.*'),
+         add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
+         [r'quant.dir/\2.DiscreteCompareTruthEstimate.tsv',
+          r'quant.dir/\2.DiscreteCompareTruthEstimateIsodecoder.tsv',
+          r'quant.dir/\2.DiscreteCompareTruthEstimateAnticodon.tsv'])
+def compareTruthEstimateDiscreteCounts(infiles, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    all_counts_vs_truth = {'individual':[], 'isodecoder':[], 'anticodon':[]}
+
+    for infile_set in infiles:
+
+        estimates, truth = infile_set
+
+        estimate_individual, estimate_isodecoder, estimate_anticodon = estimates
+
+        simulation_n = os.path.basename(truth).split('.')[0]
+        quant_method = os.path.basename(estimate_individual).split('.')[-2] + '_discrete'
+
+        truth_counts = pd.read_csv(truth, sep='\t', header=None,
+                                   names=['Name', 'truth'])
+
+        counts_vs_truth = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
+            truth_counts, estimate_individual, simulation_n, quant_method)
+        all_counts_vs_truth['individual'].append(counts_vs_truth)
+
+        truth_counts['Name'] = ['-'.join(x.split('-')[0:4]) for x in truth_counts.Name]
+        truth_counts_isodecoder = truth_counts.groupby(
+            ['Name']).agg(
+                {'truth':'sum'}).reset_index()
+        counts_vs_truth_isodecoder = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
+            truth_counts_isodecoder, estimate_isodecoder, simulation_n, quant_method)
+        all_counts_vs_truth['isodecoder'].append(counts_vs_truth_isodecoder)
+
+        truth_counts['Name'] = ['-'.join(x.split('-')[0:3]) for x in truth_counts.Name]
+        truth_counts_anticodon = truth_counts.groupby(
+            ['Name']).agg(
+                {'truth':'sum'}).reset_index()
+        counts_vs_truth_anticodon = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
+            truth_counts_anticodon, estimate_anticodon, simulation_n, quant_method)
+        all_counts_vs_truth['anticodon'].append(counts_vs_truth_anticodon)
+
+
+    all_counts_vs_truth_individual = pd.concat(all_counts_vs_truth['individual'])
+    all_counts_vs_truth_individual.to_csv(outfile_individual, sep='\t', index=False)
+
+    all_counts_vs_truth_isodecoder = pd.concat(all_counts_vs_truth['isodecoder'])
+    all_counts_vs_truth_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
+
+    all_counts_vs_truth_anticodon = pd.concat(all_counts_vs_truth['anticodon'])
+    all_counts_vs_truth_anticodon.to_csv(outfile_anticodon, sep='\t', index=False)
+
+# Function to merge comparisons for discrete and salmon-based quant
+
+# Plotting functions
 ###################################################
 # Targets
 ###################################################
