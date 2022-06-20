@@ -67,11 +67,12 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
             outf.write(k + '\t' + str(v) + '\n')
 
 
-def mergeDiscreteEstimateWithTruth(truth, estimate_infile, simulation_n, quant_method):
+def mergeDiscreteEstimateWithTruth(truth, estimate_infile, input_file, simulation_n, quant_method):
     estimate_counts = pd.read_csv(estimate_infile , sep='\t', header=None,
                                   names=['Name', 'NumReads'])
     counts_vs_truth = pd.merge(estimate_counts, truth, on='Name')
 
+    counts_vs_truth['input_file']=input_file
     counts_vs_truth['simulation_n']=simulation_n
     counts_vs_truth['quant_method']=quant_method
     return(counts_vs_truth)

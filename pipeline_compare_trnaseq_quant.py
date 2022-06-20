@@ -34,6 +34,7 @@ from ruffus import transform, suffix, regex, merge, \
     follows, mkdir, originate, add_inputs, jobs_limit, split, \
     subdivide, formatter, collate
 
+from ruffus.combinatorics import product
 
 # import ruffus
 from ruffus import *
@@ -215,6 +216,7 @@ def mapWithBowtie2SingleReport(infiles, outfile):
 
     P.run(statement)
 
+# Not run
 @mkdir('mut_trunc_sig.dir')
 @transform(SEQUENCEFILES,
            SEQUENCEFILES_REGEX,
@@ -305,6 +307,7 @@ def create_files(output_file):
     with open(output_file, "w"):
         pass
 
+#Not run
 @mkdir('simulations.dir')
 @transform(santitisetRNAsequences,
            regex('trna_sequences.dir/(\S+).sanitised.fa'),
@@ -333,16 +336,16 @@ def simulation_uniform_no_errors(infile, outfile):
         alignment_summary=None,
         summary_level='anticodon')
 
-
-#### HERE!! Needs update so simulate from each input file, e.g not transform but combination of dummy file and summarisedMergedAlignments ###
-@mkdir('simulations.dir')
-@transform(create_files,
-           regex('simulation_dummy_files/(\d+)'),
-           add_inputs(summariseMergedAlignments, santitisetRNAsequences),
-           r'simulations.dir/\1.simulation_withseqer.fastq.gz')
+# not run
+@product(summariseMergedAlignments,
+         formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
+         create_files,
+         formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
+         'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withseqer.fastq.gz')
 def simulation_with_sequencing_errors(infiles, outfile):
 
-    simulation_n, alignment_summary_picklefile, infile = infiles
+    alignment_summary_picklefile = infiles[0][0]
+    infile = infiles[1]
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
@@ -370,13 +373,15 @@ def simulation_with_sequencing_errors(infiles, outfile):
 
 
 @mkdir('simulations.dir')
-@transform(create_files,
-           regex('simulation_dummy_files/(\d+)'),
-           add_inputs(summariseMergedAlignments, santitisetRNAsequences),
-           r'simulations.dir/\1.simulation_withmut.fastq.gz')
+@product(summariseMergedAlignments,
+         formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
+         create_files,
+         formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
+         'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withmut.fastq.gz')
 def simulation_with_mutation_errors(infiles, outfile):
 
-    simulation_n, alignment_summary_picklefile, infile = infiles
+    alignment_summary_picklefile = infiles[0][0]
+    infile = infiles[1]
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
@@ -403,13 +408,16 @@ def simulation_with_mutation_errors(infiles, outfile):
         summary_level='anticodon')
 
 @mkdir('simulations.dir')
-@transform(create_files,
-           regex('simulation_dummy_files/(\d+)'),
-           add_inputs(summariseMergedAlignments, santitisetRNAsequences),
-           r'simulations.dir/\1.simulation_withtrunc.fastq.gz')
+@product(summariseMergedAlignments,
+         formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
+         create_files,
+         formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
+         add_inputs(santitisetRNAsequences),
+         'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withtrunc.fastq.gz')
 def simulation_with_truncations(infiles, outfile):
 
-    simulation_n, alignment_summary_picklefile, infile = infiles
+    alignment_summary_picklefile = infiles[0][0]
+    infile = infiles[1]
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
@@ -440,11 +448,11 @@ def simulation_with_truncations(infiles, outfile):
 # quantify
 ###################################################
 @mkdir('quant.dir')
-@transform((simulation_uniform_no_errors,
-            simulation_with_sequencing_errors,
-            simulation_with_mutation_errors,
-            simulation_with_truncations),
-# @transform(simulation_uniform_no_errors,
+# @transform((simulation_uniform_no_errors,
+#             simulation_with_sequencing_errors,
+#             simulation_with_mutation_errors,
+#             simulation_with_truncations),
+@transform(simulation_with_truncations,
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBWAIndex),
            r'quant.dir/\1.\2.bwa.bam')
@@ -476,11 +484,11 @@ def alignWithBWA(infiles, outfile):
 
 
 @mkdir('quant.dir')
-@transform((simulation_uniform_no_errors,
-            simulation_with_sequencing_errors,
-            simulation_with_mutation_errors,
-            simulation_with_truncations),
-# @transform(simulation_uniform_no_errors,
+# @transform((simulation_uniform_no_errors,
+#             simulation_with_sequencing_errors,
+#             simulation_with_mutation_errors,
+#             simulation_with_truncations),
+@transform(simulation_with_truncations,
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBowtie2Index),
            r'quant.dir/\1.\2.bowtie2.bam')
@@ -560,11 +568,11 @@ def quantWithSalmon(infiles, outfile):
 # compare
 ###################################################
 @collate(quantWithSalmon,
-       regex(r'quant.dir/(\S+).(simulation_\S+)\.(\S+)/quant.sf'),
-       add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
-       [r'quant.dir/\2.SalmonCompareTruthEstimate.tsv',
-        r'quant.dir/\2.SalmonCompareTruthEstimateIsodecoder.tsv',
-        r'quant.dir/\2.SalmonCompareTruthEstimateAnticodon.tsv'])
+       regex(r'quant.dir/(\S+)\.(\S+).(simulation_\S+)\.(\S+)/quant.sf'),
+       add_inputs(r'simulations.dir/\1.\2.\3.fastq.gz.gt'),
+       [r'quant.dir/\1.\3.SalmonCompareTruthEstimate.tsv',
+        r'quant.dir/\1.\3.SalmonCompareTruthEstimateIsodecoder.tsv',
+        r'quant.dir/\1.\3.SalmonCompareTruthEstimateAnticodon.tsv'])
 def compareTruthEstimateSalmon(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -581,7 +589,10 @@ def compareTruthEstimateSalmon(infiles, outfiles):
 
         counts_vs_truth = pd.merge(estimate_counts, truth_counts, on='Name')
 
-        simulation_n = os.path.basename(truth).split('.')[0]
+        input_file = os.path.basename(truth).split('.')[0]
+        counts_vs_truth['input_file']=input_file
+
+        simulation_n = os.path.basename(truth).split('.')[1]
         counts_vs_truth['simulation_n']=simulation_n
 
         quant_method = os.path.dirname(estimate).split('.')[-1] + '_salmon'
@@ -626,14 +637,16 @@ def compareTruthEstimateDiscreteCounts(infiles, outfiles):
 
         estimate_individual, estimate_isodecoder, estimate_anticodon = estimates
 
-        simulation_n = os.path.basename(truth).split('.')[0]
+        input_file = os.path.basename(truth).split('.')[0]
+        simulation_n = os.path.basename(truth).split('.')[1]
         quant_method = os.path.basename(estimate_individual).split('.')[-2] + '_discrete'
+
 
         truth_counts = pd.read_csv(truth, sep='\t', header=None,
                                    names=['Name', 'truth'])
 
         counts_vs_truth = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
-            truth_counts, estimate_individual, simulation_n, quant_method)
+            truth_counts, estimate_individual, input_file, simulation_n, quant_method)
         all_counts_vs_truth['individual'].append(counts_vs_truth)
 
         truth_counts['Name'] = ['-'.join(x.split('-')[0:4]) for x in truth_counts.Name]
@@ -681,10 +694,11 @@ def summarise_alignments():
     pass
 
 
-@follows(simulation_uniform_no_errors,
-         simulation_with_sequencing_errors,
-         simulation_with_mutation_errors,
-         simulation_with_truncations)
+# @follows(simulation_uniform_no_errors,
+#          simulation_with_sequencing_errors,
+#          simulation_with_mutation_errors,
+#          simulation_with_truncations)
+@follows(simulation_with_truncations)
 def simulate():
     'simulate tRNA reads from basic to more realistic'
     pass

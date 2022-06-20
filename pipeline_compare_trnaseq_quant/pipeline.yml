@@ -7,7 +7,7 @@ input: './input'
 simulation:
 
   # How many iterations per simulation (note that uniform is only done once)
-  n: 20
+  n: 8
 
   # Uniform (same counts per tRNA sequence) simulation
   uniform_reads: 1000000
