@@ -4,11 +4,31 @@ conda_base_env: 'trna'
 # Directory for input files
 input: './input'
 
+# pipeline expects file in the format used by mimseq, e.g
+# https://github.com/nedialkova-lab/mim-tRNAseq/blob/master/mimseq/data/hg38-eColitK/hg38-tRNAs-filtered.fa
+# must end in .fa
+# Need to add back the sequence (not name!) for
+# >Homo_sapiens_tRNA-Cys-GCA-19-1 (tRNAscan-SE ID: chr7.trna22) Cys (GCA) 72 bp Sc: 69.2 chr7:149613064-149613136(-)
+# GGGGGTATAGCTCAGGGGTAGAGCATTTGACTGCAAATCAAGAGGTCCCTGATTCAAATCCAGGTGCCCCCT
+# which seems to have got removed!
+trna_sequences_infile: './hg38-tRNAs-filtered.fa'
+
+# https://github.com/nedialkova-lab/mim-tRNAseq/blob/master/build/lib/mimseq/data/hg38-eColitK/hg38-mitotRNAs.fa
+trna_mt_sequences_infile: './hg38-mitotRNAs.fa'
+
+# tRNAscan-SE .out file
+#https://raw.githubusercontent.com/nedialkova-lab/mim-tRNAseq/master/mimseq/data/hg38-eColitK/hg38-tRNAs-detailed.out
+trna_scan_infile: './hg38-tRNAs-detailed.out'
+
 simulation:
 
   # How many iterations per simulation (note that uniform is only done once)
-  n: 8
+  n: 2
 
   # Uniform (same counts per tRNA sequence) simulation
   uniform_reads: 1000000
   withmut_reads: 1000000
+
+mimseq:
+  threads: 7
+  conda_env_name: 'mimseq'

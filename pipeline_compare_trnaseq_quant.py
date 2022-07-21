@@ -42,17 +42,13 @@ from ruffus import *
 # import useful standard python modules
 import sys
 import os
+import re
+import pickle
+import shutil
+import glob
 
 import pandas as pd
 
-import pickle
-# import re
-# import shutil
-# import sqlite3
-# import glob
-
-# import cgatcore modules
-#import cgatcore.experiment as E
 from cgatcore import pipeline as P
 import cgatcore.iotools as iotools
 
@@ -93,43 +89,37 @@ SEQUENCEFILES_REGEX = regex(r"(.*\/)*(\S+).(fastq.1.gz|fastq.gz|fastq)")
 # Prepare inputs
 ###################################################
 
-
 @mkdir('trna_sequences.dir')
-@originate('trna_sequences.dir/hg38-tRNAs.fa')
-def downloadtRNAsequences(outfile):
+@originate('trna_sequences.dir/mt_sequences.fa')
+def updateMtFastaNaming(outfile):
+    CompareTrnaSeq.updateMtFastaNaming(PARAMS['trna_mt_sequences_infile'], outfile)
 
-    url = 'http://gtrnadb.ucsc.edu/genomes/eukaryota/Hsapi38/hg38-tRNAs.fa'
+@merge((PARAMS['trna_sequences_infile'], updateMtFastaNaming),
+       'trna_sequences.dir/trna_sequences_all.fa')
+def mergeNucMtSequences(infiles, outfile):
 
-    statement = '''
-    wget %(url)s
-    -O %(outfile)s
-    ''' % locals()
-    # Very small task so running locally is OK, even on HPC!
-    P.run(statement, submit=False)
+    with open(outfile, 'w') as outf:
+        for infile in infiles:
+            with open(infile, 'r') as inf:
+                for line in inf:
+                    outf.write(line)
 
-
-@transform(downloadtRNAsequences,
-           regex('trna_sequences.dir/(\S+).fa'),
-           r'trna_sequences.dir/\1.sanitised.fa')
-def santitisetRNAsequences(infile, outfile):
-    fasta.santitiseGtRNAdbFasta(infile, outfile)
-
-
-@transform(santitisetRNAsequences,
-           regex('trna_sequences.dir/(\S+).sanitised.fa'),
-           r'trna_sequences.dir/\1.sanitised.fa.bwt')
+@transform(mergeNucMtSequences,
+           regex('.*/(\S+).fa'),
+           r'trna_sequences.dir/\1.fa.bwt')
 def buildBWAIndex(infile, outfile):
     'Index the tRNA sequences for BWA'
 
-    statement = 'bwa index %(infile)s' % locals()
+    prefix = iotools.snip(outfile, '.bwt')
+    statement = 'bwa index -p %(prefix)s %(infile)s' % locals()
 
     # Very small task so running locally is OK, even on HPC!
     P.run(statement, submit=False)
 
 
-@transform(santitisetRNAsequences,
-           regex('trna_sequences.dir/(\S+).sanitised.fa'),
-           r'trna_sequences.dir/\1.sanitised.fa.1.bt2')
+@transform(mergeNucMtSequences,
+           regex('.*/(\S+).fa'),
+           r'trna_sequences.dir/\1.fa.1.bt2')
 def buildBowtie2Index(infile, outfile):
     'Index the tRNA sequences for Bowtie2'
 
@@ -140,9 +130,9 @@ def buildBowtie2Index(infile, outfile):
     P.run(statement, submit=False)
 
 
-@transform(santitisetRNAsequences,
-           regex('trna_sequences.dir/(\S+).sanitised.fa'),
-           r'trna_sequences.dir/\1.sanitised.fa.idx')
+@transform(mergeNucMtSequences,
+           regex('.*/(\S+).fa'),
+           r'trna_sequences.dir/\1.fa.idx')
 def buildSegemehlIndex(infile, outfile):
     'Index the tRNA sequences for Segemehl'
 
@@ -150,11 +140,11 @@ def buildSegemehlIndex(infile, outfile):
 
     # Very small task so running locally is OK, even on HPC!
     P.run(statement, submit=False)
+
 ###################################################
 # Learn mutation and truncation signatures
 ###################################################
 
-print(SEQUENCEFILES)
 @mkdir('mut_trunc_sig.dir')
 @transform(SEQUENCEFILES,
            SEQUENCEFILES_REGEX,
@@ -220,7 +210,7 @@ def mapWithBowtie2SingleReport(infiles, outfile):
 @mkdir('mut_trunc_sig.dir')
 @transform(SEQUENCEFILES,
            SEQUENCEFILES_REGEX,
-           add_inputs(buildSegemehlIndex, santitisetRNAsequences),
+           add_inputs(buildSegemehlIndex, mergeNucMtSequences),
            r"mut_trunc_sig.dir/\2_SegemehlReportSingle.bam")
 def mapWithSegemehlSingleReport(infiles, outfile):
     '''
@@ -268,10 +258,11 @@ def mergeSingleReports(infiles, outfile):
 # @transform((mapWithBWAMEMSingleReport,
 #             mapWithBowtie2SingleReport,
 #             mapWithSegemehlSingleReport),
+# Not run
 @transform((mapWithBWAMEMSingleReport,
             mapWithBowtie2SingleReport),
            suffix('.bam'),
-           add_inputs(santitisetRNAsequences),
+           add_inputs(mergeNucMtSequences),
            '.summariseAlignments.pickle')
 def summariseIndividualAlignments(infiles, outfile):
     '''
@@ -285,7 +276,7 @@ def summariseIndividualAlignments(infiles, outfile):
 
 @transform(mergeSingleReports,
            suffix('.bam'),
-           add_inputs(santitisetRNAsequences),
+           add_inputs(mergeNucMtSequences),
            '.summariseAlignments.pickle')
 def summariseMergedAlignments(infiles, outfile):
     '''
@@ -294,7 +285,7 @@ def summariseMergedAlignments(infiles, outfile):
     '''
 
     infile, trna_fasta = infiles
-
+    print(infile)
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
 
 
@@ -309,18 +300,14 @@ def create_files(output_file):
 
 #Not run
 @mkdir('simulations.dir')
-@transform(santitisetRNAsequences,
-           regex('trna_sequences.dir/(\S+).sanitised.fa'),
+@transform(mergeNucMtSequences,
+           regex('.*/(\S+).fa'),
            r'simulations.dir/\1.simulation_uniform.fastq.gz')
 def simulation_uniform_no_errors(infile, outfile):
 
     n_reads = int(PARAMS['simulation_uniform_reads'])
 
-    gt = simulateReads.make_gt(infile, 1, 0)
-
-    adjustment_factor = n_reads / sum(gt.values())
-
-    gt = {x:round(gt[x] * adjustment_factor) for x in gt.keys()}
+    gt = simulateReads.make_gt(infile, n_reads, 1, 0, filter='\-Und\-')
 
     with open(outfile + '.gt', 'w') as out:
         for k,v in gt.items():
@@ -349,11 +336,7 @@ def simulation_with_sequencing_errors(infiles, outfile):
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
-    gt = simulateReads.make_gt(infile, 1000, 500)
-
-    adjustment_factor = n_reads / sum(gt.values())
-
-    gt = {x:round(gt[x] * adjustment_factor) for x in gt.keys()}
+    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-')
 
     with open(outfile + '.gt', 'w') as out:
         for k,v in gt.items():
@@ -385,19 +368,11 @@ def simulation_with_mutation_errors(infiles, outfile):
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
-    gt = simulateReads.make_gt(infile, 1000, 500)
-
-    adjustment_factor = n_reads / sum(gt.values())
-
-    gt = {x:round(gt[x] * adjustment_factor) for x in gt.keys()}
-
-    with open(outfile + '.gt', 'w') as out:
-        for k,v in gt.items():
-            out.write('%s\t%s\n' % (k, v))
+    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-')
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
-    simulateReads.simulate_reads(
+    updated_gt = simulateReads.simulate_reads(
         infile,
         outfile,
         gt,
@@ -407,12 +382,16 @@ def simulation_with_mutation_errors(infiles, outfile):
         alignment_summary=alignment_summary,
         summary_level='anticodon')
 
+    with open(outfile + '.gt', 'w') as out:
+        for k,v in updated_gt.items():
+            out.write('%s\t%s\n' % (k, v))
+
 @mkdir('simulations.dir')
 @product(summariseMergedAlignments,
          formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
          create_files,
          formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
-         add_inputs(santitisetRNAsequences),
+         add_inputs(mergeNucMtSequences),
          'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withtrunc.fastq.gz')
 def simulation_with_truncations(infiles, outfile):
 
@@ -421,19 +400,11 @@ def simulation_with_truncations(infiles, outfile):
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
-    gt = simulateReads.make_gt(infile, 1000, 500)
-
-    adjustment_factor = n_reads / sum(gt.values())
-
-    gt = {x:round(gt[x] * adjustment_factor) for x in gt.keys()}
-
-    with open(outfile + '.gt', 'w') as out:
-        for k,v in gt.items():
-            out.write('%s\t%s\n' % (k, v))
+    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-')
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
-    simulateReads.simulate_reads(
+    updated_gt = simulateReads.simulate_reads(
         infile,
         outfile,
         gt,
@@ -443,9 +414,12 @@ def simulation_with_truncations(infiles, outfile):
         alignment_summary=alignment_summary,
         summary_level='anticodon')
 
+    with open(outfile + '.gt', 'w') as out:
+        for k,v in updated_gt.items():
+            out.write('%s\t%s\n' % (k, v))
 
 ###################################################
-# quantify
+# align
 ###################################################
 @mkdir('quant.dir')
 # @transform((simulation_uniform_no_errors,
@@ -522,6 +496,33 @@ def alignWithBowtie2(infiles, outfile):
     os.unlink(tmp_file)
 
 
+@mkdir('truth2assignment.dir')
+@transform((alignWithBWA,
+            alignWithBowtie2),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
+def getTruth2Assignment(infile, outfile):
+    'Get the tally of ground truths to assignments'
+    CompareTrnaSeq.getTruth2Assignment(infile, outfile, submit=True)
+
+@collate(getTruth2Assignment,
+         regex('truth2assignment.dir/(\S+)\.(\d+)\.(simulation_\S+)\.(\S+)\.truth2assignment.tsv'),
+         r'truth2assignment.dir/truth2assignment.\3.tsv')
+def mergeTruth2Assignment(infiles, outfile):
+
+    CompareTrnaSeq.mergeTruth2Assignment(infiles, outfile, submit=True)
+
+    infiles_anticodon  = [re.sub('.tsv$', '_anticodon.tsv', x) for x in infiles]
+    outfile_anticodon = re.sub('.tsv$', '_anticodon.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2Assignment(infiles_anticodon, outfile_anticodon, submit=True)
+
+    infiles_isodecoder  = [re.sub('.tsv$', '_isodecoder.tsv', x) for x in infiles]
+    outfile_isodecoder = re.sub('.tsv$', '_isodecoder.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2Assignment(infiles_isodecoder, outfile_isodecoder, submit=True)
+
+###################################################
+# quantify
+###################################################
 @transform((alignWithBWA,
             alignWithBowtie2),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
@@ -542,7 +543,26 @@ def quantDiscreteCounts(infile, outfiles):
 @transform((alignWithBWA,
             alignWithBowtie2),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           add_inputs(santitisetRNAsequences),
+           [r'quant.dir/\1.\2.\3.gene_count_mapq10_individual',
+           r'quant.dir/\1.\2.\3.gene_count_mapq10_isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_mapq10_anticodon'])
+def quantDiscreteCountsMAPQ10(infile, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    CompareTrnaSeq.tally_read_counts(
+    infile,
+    outfile_individual,
+    outfile_isodecoder,
+    outfile_anticodon,
+    min_mapq=10,
+    submit=True)
+
+
+@transform((alignWithBWA,
+            alignWithBowtie2),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           add_inputs(mergeNucMtSequences),
            r'quant.dir/\1.\2.\3/quant.sf')
 def quantWithSalmon(infiles, outfile):
 
@@ -564,118 +584,161 @@ def quantWithSalmon(infiles, outfile):
     P.run(statement)
 
 
+@follows(quantWithSalmon) # avoid mimseq running alongside salmon!
+@jobs_limit(1)
+@mkdir('mimseq.dir')
+@collate(simulation_with_truncations,
+         regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
+         r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
+def quantWithMimSeq(infiles, outfile):
+
+    nuc_trnas = PARAMS['trna_sequences_infile']
+    mt_trnas = PARAMS['trna_mt_sequences_infile']
+    trna_scan = PARAMS['trna_scan_infile']
+    threads = PARAMS['mimseq_threads']
+
+    outdir = os.path.dirname(os.path.dirname(outfile))
+    tmp_outdir = P.get_temp_dir(clear=True)
+    tmp_stdouterr = P.get_temp_filename()
+
+    # create a dummy sample file so that all samples can be
+    # quantified in one mimseq run
+    tmp_sample_data = P.get_temp_filename(dir='.')
+    with open(tmp_sample_data, 'w') as outf:
+        for ix, infile in enumerate(infiles):
+            if (ix % 2) == 0:
+                condition = 'condition1'
+            else:
+                condition = 'condition2'
+            outf.write('./%s\t%s\n' % (infile, condition))
+
+    statement = '''
+    mimseq
+    --search vsearch
+    --trnas %(nuc_trnas)s
+    --mito-trnas %(mt_trnas)s
+    --trnaout %(trna_scan)s
+    --cluster-id 0.97
+    --threads %(threads)s
+    --min-cov 0.0005
+    --max-mismatches 0.075
+    --control-condition condition1
+    -n results
+    --out-dir %(tmp_outdir)s
+    --max-multi 4
+    --remap
+    --remap-mismatches 0.05
+    %(tmp_sample_data)s
+    > %(tmp_stdouterr)s
+    2>&1;
+    mkdir %(outdir)s;
+    mv %(tmp_outdir)s/* %(outdir)s;
+    mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
+    ''' % locals()
+
+    P.run(statement, job_condaenv=PARAMS['mimseq_conda_env_name'])
+
 ###################################################
 # compare
 ###################################################
+@transform(quantWithMimSeq,
+           regex('mimseq.dir/(\S+?)_(simulation_\S+)/counts/Anticodon_counts_raw.txt'),
+           add_inputs(r'simulations.dir/\1*.simulation_withtrunc.fastq.gz.gt'),
+           [r'mimseq.dir/\1.\2.MimseqCompareTruthEstimateMimseqIsodecoder.tsv',
+            r'mimseq.dir/\1.\2.MimseqCompareTruthEstimateAnticodon.tsv'])
+def compareTruthEstimateMimseq(infiles, outfiles):
+    '''mimseq reports isodecoder-level quantification with some isodecoders still merged together,
+    hence isodecoder file is suffixed with MimSeqIsodecoder.tsv to distinguish if from
+    the other Isodecoder.tsv outputs
+    '''
+
+    isodecoder_out, anticodon_out = outfiles
+
+    infile = infiles[0]
+    truths = infiles[1:]
+
+    CompareTrnaSeq.compareMimSeq(infile, truths, isodecoder_out, anticodon_out)
+
+@collate(compareTruthEstimateMimseq,
+         regex('mimseq.dir/(\S+)\.(simulation_\S+)\.MimseqCompareTruthEstimateMimseqIsodecoder.tsv'),
+       [r'quant.dir/\2.Mimseq.CompareTruthEstimateMimseqIsodecoder.tsv',
+        r'quant.dir/\2.Mimseq.CompareTruthEstimateAnticodon.tsv'])
+def mergeCompareTruthEstimateMimseq(infiles, outfiles):
+    outfile_isodecoder, outfile_anticodon = outfiles
+    infiles_isodecoder = [x[0] for x in infiles]
+    infiles_anticodon = [x[1] for x in infiles]
+
+    def cat_files(infiles, outfile):
+        with open(outfile, 'w') as outf:
+            out_header = True
+            for fn in infiles:
+                with open(fn, 'r') as inf:
+                    header = next(inf)
+                    if out_header:
+                        outf.write(header)
+                        out_header = False
+                    for line in inf:
+                        outf.write(line)
+
+    cat_files(infiles_isodecoder, outfile_isodecoder)
+    cat_files(infiles_anticodon, outfile_anticodon)
+
+
+@merge(compareTruthEstimateMimseq,
+       'quant.dir/mimseq_isodecoder_maps.tsv')
+def mergeMimSeqIsodecoderMaps(infiles, outfile):
+
+    isodecoder_maps = []
+    infiles = [x[0] for x in infiles]
+
+    for mapping_file in infiles:
+        isodecoder_mapping = pd.read_csv(
+            mapping_file + '.mapping', sep='\t', header=None, names=['isodecoder','mimseq_isodecoder'])
+        isodecoder_mapping['trna_method'] = os.path.basename(mapping_file).split('.')[0]
+        isodecoder_maps.append(isodecoder_mapping)
+
+    isodecoder_maps = pd.concat(isodecoder_maps)
+
+    isodecoder_maps.to_csv(outfile, sep='\t', index=False)
+
 @collate(quantWithSalmon,
        regex(r'quant.dir/(\S+)\.(\S+).(simulation_\S+)\.(\S+)/quant.sf'),
        add_inputs(r'simulations.dir/\1.\2.\3.fastq.gz.gt'),
-       [r'quant.dir/\1.\3.SalmonCompareTruthEstimate.tsv',
-        r'quant.dir/\1.\3.SalmonCompareTruthEstimateIsodecoder.tsv',
-        r'quant.dir/\1.\3.SalmonCompareTruthEstimateAnticodon.tsv'])
+       [r'quant.dir/\3.Salmon.CompareTruthEstimate.tsv',
+        r'quant.dir/\3.Salmon.CompareTruthEstimateIsodecoder.tsv',
+        r'quant.dir/\3.Salmon.CompareTruthEstimateAnticodon.tsv'])
 def compareTruthEstimateSalmon(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
-    all_counts_vs_truth = []
-
-    for infile_pair in infiles:
-
-        estimate, truth = infile_pair
-
-        estimate_counts = pd.read_csv(estimate, sep='\t')[['Name', 'NumReads']]
-        truth_counts = pd.read_csv(truth, sep='\t', header=None,
-                                   names=['Name', 'truth'])
-
-        counts_vs_truth = pd.merge(estimate_counts, truth_counts, on='Name')
-
-        input_file = os.path.basename(truth).split('.')[0]
-        counts_vs_truth['input_file']=input_file
-
-        simulation_n = os.path.basename(truth).split('.')[1]
-        counts_vs_truth['simulation_n']=simulation_n
-
-        quant_method = os.path.dirname(estimate).split('.')[-1] + '_salmon'
-        counts_vs_truth['quant_method']=quant_method
-
-        all_counts_vs_truth.append(counts_vs_truth)
-
-    all_counts_vs_truth = pd.concat(all_counts_vs_truth)
-    all_counts_vs_truth.to_csv(outfile_individual, sep='\t', index=False)
-
-    all_counts_vs_truth['Name'] = ['-'.join(x.split('-')[0:4]) for x in all_counts_vs_truth.Name]
-    all_counts_vs_truth_isodecoder = all_counts_vs_truth.groupby(
-        ['Name', 'simulation_n', 'quant_method']).agg(
-            {'NumReads':'sum', 'truth':'sum'}).reset_index()
-    all_counts_vs_truth_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
-
-    all_counts_vs_truth['Name'] = ['-'.join(x.split('-')[0:3]) for x in all_counts_vs_truth.Name]
-    all_counts_vs_truth_ac = all_counts_vs_truth.groupby(
-        ['Name', 'simulation_n', 'quant_method']).agg(
-            {'NumReads':'sum', 'truth':'sum'}).reset_index()
-    all_counts_vs_truth_ac.to_csv(outfile_anticodon, sep='\t', index=False)
+    CompareTrnaSeq.compareTruthEstimateSalmon(
+        infiles, outfile_individual, outfile_isodecoder, outfile_anticodon)
 
 
-
-
-
-@collate(quantDiscreteCounts,
-         regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).gene_count_.*'),
+@collate((quantDiscreteCounts, quantDiscreteCountsMAPQ10),
+         regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).(gene_count.*)_.*'),
          add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
-         [r'quant.dir/\2.DiscreteCompareTruthEstimate.tsv',
-          r'quant.dir/\2.DiscreteCompareTruthEstimateIsodecoder.tsv',
-          r'quant.dir/\2.DiscreteCompareTruthEstimateAnticodon.tsv'])
+         [r'quant.dir/\2.\4_Discrete.CompareTruthEstimate.tsv',
+          r'quant.dir/\2.\4_Discrete.CompareTruthEstimateIsodecoder.tsv',
+          r'quant.dir/\2.\4_Discrete.CompareTruthEstimateAnticodon.tsv'])
 def compareTruthEstimateDiscreteCounts(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
-    all_counts_vs_truth = {'individual':[], 'isodecoder':[], 'anticodon':[]}
-
-    for infile_set in infiles:
-
-        estimates, truth = infile_set
-
-        estimate_individual, estimate_isodecoder, estimate_anticodon = estimates
-
-        input_file = os.path.basename(truth).split('.')[0]
-        simulation_n = os.path.basename(truth).split('.')[1]
-        quant_method = os.path.basename(estimate_individual).split('.')[-2] + '_discrete'
+    CompareTrnaSeq.compareTruthEstimateDiscreteCounts(
+        infiles, outfile_individual, outfile_isodecoder, outfile_anticodon)
 
 
-        truth_counts = pd.read_csv(truth, sep='\t', header=None,
-                                   names=['Name', 'truth'])
+@transform((compareTruthEstimateDiscreteCounts, compareTruthEstimateSalmon),
+           regex('quant.dir/(\S+).CompareTruthEstimate.tsv'),
+           add_inputs(mergeMimSeqIsodecoderMaps),
+           r'quant.dir/\1.CompareTruthEstimateMimseqIsodecoder.tsv')
+def makeMimseqIsodecoderQuant(infiles, outfile):
+    infile = infiles[0][1]
+    mapping_file = infiles[1]
 
-        counts_vs_truth = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
-            truth_counts, estimate_individual, input_file, simulation_n, quant_method)
-        all_counts_vs_truth['individual'].append(counts_vs_truth)
-
-        truth_counts['Name'] = ['-'.join(x.split('-')[0:4]) for x in truth_counts.Name]
-        truth_counts_isodecoder = truth_counts.groupby(
-            ['Name']).agg(
-                {'truth':'sum'}).reset_index()
-        counts_vs_truth_isodecoder = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
-            truth_counts_isodecoder, estimate_isodecoder, simulation_n, quant_method)
-        all_counts_vs_truth['isodecoder'].append(counts_vs_truth_isodecoder)
-
-        truth_counts['Name'] = ['-'.join(x.split('-')[0:3]) for x in truth_counts.Name]
-        truth_counts_anticodon = truth_counts.groupby(
-            ['Name']).agg(
-                {'truth':'sum'}).reset_index()
-        counts_vs_truth_anticodon = CompareTrnaSeq.mergeDiscreteEstimateWithTruth(
-            truth_counts_anticodon, estimate_anticodon, simulation_n, quant_method)
-        all_counts_vs_truth['anticodon'].append(counts_vs_truth_anticodon)
-
-
-    all_counts_vs_truth_individual = pd.concat(all_counts_vs_truth['individual'])
-    all_counts_vs_truth_individual.to_csv(outfile_individual, sep='\t', index=False)
-
-    all_counts_vs_truth_isodecoder = pd.concat(all_counts_vs_truth['isodecoder'])
-    all_counts_vs_truth_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
-
-    all_counts_vs_truth_anticodon = pd.concat(all_counts_vs_truth['anticodon'])
-    all_counts_vs_truth_anticodon.to_csv(outfile_anticodon, sep='\t', index=False)
-
-# Function to merge comparisons for discrete and salmon-based quant
+    CompareTrnaSeq.makeMimseqIsodecoderQuant(infile, mapping_file, outfile)
+# Function to merge comparisons for discrete, salmon-based and mimseq quant
 
 # Plotting functions
 ###################################################
@@ -704,19 +767,25 @@ def simulate():
     pass
 
 
-@follows(summariseIndividualAlignments,
-         summariseMergedAlignments)
+# @follows(summariseIndividualAlignments,
+#          summariseMergedAlignments)
+@follows(summariseMergedAlignments)
 def summariseAlignments():
     'summarise the alignments with real reads'
     pass
 
 
-@follows(quantWithSalmon)
+@follows(quantWithSalmon, quantWithMimSeq)
 def quant():
     'Quantify from the simulated reads'
     pass
 
-@follows(compareTruthEstimateSalmon)
+@follows(getTruth2Assignment,
+         compareTruthEstimateSalmon,
+         compareTruthEstimateDiscreteCounts,
+         compareTruthEstimateMimseq,
+         mergeCompareTruthEstimateMimseq,
+         makeMimseqIsodecoderQuant)
 def compare():
     'compare observed and ground truth'
     pass
