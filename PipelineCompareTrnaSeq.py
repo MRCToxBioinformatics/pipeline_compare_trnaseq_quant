@@ -50,12 +50,12 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
         if len(assignments) == 1:
             assignment = assignments.pop()
             read_counts['individual_sequence'][assignment] += 1
-            read_counts['anticodon']['-'.join(assignment.split('-')[0:3])] +=1
+            read_counts['anticodon'][re.sub('\d$', '', '-'.join(assignment.split('-')[0:3]).replace('tRX', 'tRNA'))] +=1
             read_counts['isodecoder']['-'.join(assignment.split('-')[0:4])] +=1
 
         # multiple gene assignments
         else:
-            anticodons = set(['-'.join(x.split('-')[0:3]) for x in assignments])
+            anticodons = set([re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in assignments])
             isodecoders = set(['-'.join(x.split('-')[0:4]) for x in assignments])
 
             if len(anticodons)==1:
@@ -260,8 +260,8 @@ def getTruth2Assignment(infile, outfile):
                 outf.write('\t'.join(map(str, (k, k2, c))) + '\n')
 
     t2a_df = t2a_df = pd.read_csv(outfile, sep='\t')
-    t2a_df['truth_anticodon'] = ['-'.join(x.split('-')[0:3]) for x in t2a_df['truth']]
-    t2a_df['assignment_anticodon'] = ['-'.join(x.split('-')[0:3]) for x in t2a_df['assignment']]
+    t2a_df['truth_anticodon'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in t2a_df['truth']]
+    t2a_df['assignment_anticodon'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in t2a_df['assignment']]
 
     t2a_df_anticodon = t2a_df.groupby(['truth_anticodon', 'assignment_anticodon']).agg({'count':'sum'}).reset_index()
     t2a_df_anticodon.to_csv(re.sub('.tsv$', '_anticodon.tsv', outfile), sep='\t')
@@ -326,7 +326,7 @@ def compareTruthEstimateSalmon(
             {'NumReads':'sum', 'truth':'sum'}).reset_index()
     all_counts_vs_truth_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
 
-    all_counts_vs_truth['Name'] = ['-'.join(x.split('-')[0:3]) for x in all_counts_vs_truth.Name]
+    all_counts_vs_truth['Name'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in all_counts_vs_truth.Name]
     all_counts_vs_truth_ac = all_counts_vs_truth.groupby(
         ['Name', 'simulation_n', 'quant_method', 'input_file']).agg(
             {'NumReads':'sum', 'truth':'sum'}).reset_index()
@@ -367,7 +367,7 @@ def compareTruthEstimateDiscreteCounts(infiles, outfile_individual, outfile_isod
             truth_counts_isodecoder, estimate_isodecoder, input_file, simulation_n, quant_method)
         all_counts_vs_truth['isodecoder'].append(counts_vs_truth_isodecoder)
 
-        truth_counts['Name'] = ['-'.join(x.split('-')[0:3]) for x in truth_counts.Name]
+        truth_counts['Name'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in truth_counts.Name]
         truth_counts_anticodon = truth_counts.groupby(
             ['Name']).agg(
                 {'truth':'sum'}).reset_index()

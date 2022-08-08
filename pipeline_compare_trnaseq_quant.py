@@ -500,7 +500,7 @@ def alignWithBowtie2(infiles, outfile):
 @transform((alignWithBWA,
             alignWithBowtie2),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
+               r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
 def getTruth2Assignment(infile, outfile):
     'Get the tally of ground truths to assignments'
     CompareTrnaSeq.getTruth2Assignment(infile, outfile, submit=True)
@@ -597,7 +597,6 @@ def quantWithMimSeq(infiles, outfile):
     trna_scan = PARAMS['trna_scan_infile']
     threads = PARAMS['mimseq_threads']
 
-    outdir = os.path.dirname(os.path.dirname(outfile))
     tmp_outdir = P.get_temp_dir(clear=True)
     tmp_stdouterr = P.get_temp_filename()
 
@@ -611,6 +610,9 @@ def quantWithMimSeq(infiles, outfile):
             else:
                 condition = 'condition2'
             outf.write('./%s\t%s\n' % (infile, condition))
+
+
+    outdir = os.path.dirname(os.path.dirname(outfile))
 
     statement = '''
     mimseq
@@ -631,12 +633,14 @@ def quantWithMimSeq(infiles, outfile):
     %(tmp_sample_data)s
     > %(tmp_stdouterr)s
     2>&1;
+    rm -rf %(outdir)s;
     mkdir %(outdir)s;
     mv %(tmp_outdir)s/* %(outdir)s;
     mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
     ''' % locals()
 
     P.run(statement, job_condaenv=PARAMS['mimseq_conda_env_name'])
+
 
 ###################################################
 # compare
