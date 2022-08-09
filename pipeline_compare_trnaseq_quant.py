@@ -289,6 +289,8 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     tmp_file_sam = P.get_temp_filename()
     tmp_file_single_sam = P.get_temp_filename()
 
+    threads = PARAMS['shrimp_threads']
+    
     # Need to convert fastq to fasta for SHRiMP
     statement = '''
     zcat < %(infile)s |
@@ -300,6 +302,7 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     gmapper
     %(tmp_file_fasta)s
     %(trna_sequences)s
+    -N %(threads)s
     --strata  --report 1000
     --sam-unaligned
     --mode mirna

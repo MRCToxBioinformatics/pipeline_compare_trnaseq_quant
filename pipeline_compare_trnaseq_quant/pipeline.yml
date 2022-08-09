@@ -32,3 +32,6 @@ simulation:
 mimseq:
   threads: 7
   conda_env_name: 'mimseq'
+
+shrimp:
+  threads: 1
