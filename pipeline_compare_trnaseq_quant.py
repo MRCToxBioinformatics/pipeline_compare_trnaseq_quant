@@ -77,6 +77,10 @@ try:
 except KeyError:
     PARAMS["input"] = "."
 
+print(PARAMS)
+for k,v in PARAMS.items():
+    print(k,v)
+
 # define input files. Here we allow single or paired end
 SEQUENCESUFFIXES = ("*.fastq.1.gz", "*.fastq.gz", "*.fastq")
 
@@ -119,8 +123,8 @@ def buildBWAIndex(infile, outfile):
 
 
 @transform(mergeNucMtSequences,
-           regex('.*/(\S+).fa'),
-           r'trna_sequences.dir/\1.fa.1.bt2')
+       regex('.*/(\S+).fa'),
+       r'trna_sequences.dir/\1.fa.1.bt2')
 def buildBowtie2Index(infile, outfile):
     'Index the tRNA sequences for Bowtie2'
 
@@ -185,6 +189,8 @@ def mapWithBWAMEMSingleReport(infiles, outfile):
     rm -f %(tmp_file)s
     ''' % locals()
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+
     P.run(statement)
 
 
@@ -218,6 +224,8 @@ def mapWithBowtie2SingleReport(infiles, outfile):
     samtools index %(outfile)s;
     rm -f %(tmp_file)s
     ''' % locals()
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
 
     P.run(statement)
 
@@ -253,6 +261,8 @@ def mapWithGSNAPSingleReport(infiles, outfile):
     2> %(outfile)s.log;
     samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
     ''' % locals()
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
 
     P.run(statement)
 
@@ -297,6 +307,8 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     2> %(outfile)s.log ;
     samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
     ''' % locals()
+
+    job_options = PARAMS['cluster_options'] + " -t 3:00:00"
 
     P.run(statement)
 
