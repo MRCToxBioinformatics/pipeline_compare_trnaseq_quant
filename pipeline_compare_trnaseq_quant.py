@@ -340,14 +340,11 @@ def mapWithSegemehlSingleReport(infiles, outfile):
 
     P.run(statement)
 
-# @collate((mapWithBWAMEMSingleReport,
-#           mapWithBowtie2SingleReport,
-#           mapWithSegemehlSingleReport),
-@collate((mapWithBWAMEMSingleReport,
-          mapWithBowtie2SingleReport,
+
+@collate((mapWithBowtie2SingleReport,
           mapWithSHRiMP2SingleReport,
           mapWithGSNAPSingleReport),
-       regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|bwaMemReportSingle|SHRiMPReportSingle|GSNAPReportSingle).bam'),
+       regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|SHRiMPReportSingle|GSNAPReportSingle).bam'),
        r'mut_trunc_sig.dir/\1.merged.bam')
 def mergeSingleReports(infiles, outfile):
 
@@ -360,12 +357,8 @@ def mergeSingleReports(infiles, outfile):
 
     P.run(statement)
 
-# @transform((mapWithBWAMEMSingleReport,
-#             mapWithBowtie2SingleReport,
-#             mapWithSegemehlSingleReport),
-# Not run
-@transform((mapWithBWAMEMSingleReport,
-            mapWithBowtie2SingleReport,
+
+@transform((mapWithBowtie2SingleReport,
             mapWithSHRiMP2SingleReport,
             mapWithGSNAPSingleReport),
            suffix('.bam'),
@@ -924,15 +917,12 @@ def mergeTruth2Assignment(infiles, outfile):
     CompareTrnaSeq.mergeTruth2Assignment(infiles_mimseq_isodecoder, outfile_mimseq_isodecoder, submit=True)
 ####################################################
 
-# Plotting functions
+
+
+
 ###################################################
 # Targets
 ###################################################
-
-@follows(buildBWAIndex)
-def build_input():
-    'prepare inputs'
-    pass
 
 
 @follows(simulation_uniform,
