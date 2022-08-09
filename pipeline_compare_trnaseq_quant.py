@@ -48,6 +48,7 @@ import shutil
 import glob
 
 import pandas as pd
+import pysam
 
 from cgatcore import pipeline as P
 import cgatcore.iotools as iotools
@@ -129,6 +130,20 @@ def buildBowtie2Index(infile, outfile):
     # Very small task so running locally is OK, even on HPC!
     P.run(statement, submit=False)
 
+@transform(mergeNucMtSequences,
+           regex('.*/(\S+).fa'),
+           r'trna_sequences.dir/\1_gsnap_index')
+def buildGSNAPIndex(infile, outfile):
+    'Index the tRNA sequences for GSNAP'
+
+    outdir = os.path.dirname(outfile)
+    outfile_base = os.path.basename(outfile)
+
+    statement = 'gmap_build -q 1 -D %(outdir)s -d %(outfile_base)s %(infile)s' % locals()
+
+    # Very small task so running locally is OK, even on HPC!
+    P.run(statement, submit=False)
+
 
 @transform(mergeNucMtSequences,
            regex('.*/(\S+).fa'),
@@ -206,6 +221,94 @@ def mapWithBowtie2SingleReport(infiles, outfile):
 
     P.run(statement)
 
+SEQUENCEFILES_REGEX2 = regex(r"(.*\/)*(YAMATseq_BT20_A).(fastq.1.gz|fastq.gz|fastq)")
+
+@mkdir('mut_trunc_sig.dir')
+@transform(SEQUENCEFILES,
+           SEQUENCEFILES_REGEX,
+           add_inputs(buildGSNAPIndex),
+           r"mut_trunc_sig.dir/\2_GSNAPReportSingle.bam")
+def mapWithGSNAPSingleReport(infiles, outfile):
+    '''
+    Map reads to the tRNA sequences, reporting only one alignment per read
+    '''
+    infile, gsnap_index = infiles
+
+    gsnap_index_dir = os.path.dirname(gsnap_index)
+    gsnap_index_base = os.path.basename(gsnap_index)
+
+    tmp_file_sam = P.get_temp_filename()
+    tmp_file_single_sam = P.get_temp_filename()
+
+    statement = '''
+    gsnap
+    --gunzip
+    -D %(gsnap_index_dir)s
+    -d %(gsnap_index_base)s
+    --format sam
+    --genome-unk-mismatch 0
+    --ignore-trim-in-filtering 1
+    %(infile)s
+    -o %(tmp_file_sam)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
+    ''' % locals()
+
+    P.run(statement)
+
+    bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
+    pysam.sort(tmp_file_single_sam, "-o", outfile)
+    pysam.index(outfile)
+
+    os.unlink(tmp_file_sam)
+    os.unlink(tmp_file_single_sam)
+
+
+@mkdir('mut_trunc_sig.dir')
+@transform(SEQUENCEFILES,
+           SEQUENCEFILES_REGEX,
+           add_inputs(mergeNucMtSequences),
+           r"mut_trunc_sig.dir/\2_SHRiMPReportSingle.bam")
+def mapWithSHRiMP2SingleReport(infiles, outfile):
+    '''
+    Map reads to the tRNA sequences, reporting only one alignment per read
+    '''
+    infile, trna_sequences = infiles
+
+    tmp_file_fasta = P.get_temp_filename()
+    tmp_file_sam = P.get_temp_filename()
+    tmp_file_single_sam = P.get_temp_filename()
+
+    # Need to convert fastq to fasta for SHRiMP
+    statement = '''
+    zcat < %(infile)s |
+    sed 's/^@//g'|
+    paste - - - - |
+    awk 'BEGIN { FS="\\t" } {print ">"$1"\\n"$2}' >
+    %(tmp_file_fasta)s;
+
+    gmapper
+    %(tmp_file_fasta)s
+    %(trna_sequences)s
+    --strata  --report 1000
+    --sam-unaligned
+    --mode mirna
+    > %(tmp_file_sam)s
+    2> %(outfile)s.log ;
+    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
+    ''' % locals()
+
+    P.run(statement)
+
+    bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
+    pysam.sort(tmp_file_single_sam, "-o", outfile)
+    pysam.index(outfile)
+
+    os.unlink(tmp_file_fasta)
+    os.unlink(tmp_file_sam)
+    os.unlink(tmp_file_single_sam)
+
+
 # Not run
 @mkdir('mut_trunc_sig.dir')
 @transform(SEQUENCEFILES,
@@ -241,8 +344,10 @@ def mapWithSegemehlSingleReport(infiles, outfile):
 #           mapWithBowtie2SingleReport,
 #           mapWithSegemehlSingleReport),
 @collate((mapWithBWAMEMSingleReport,
-          mapWithBowtie2SingleReport),
-       regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|bwaMemReportSingle|SegemehlReportSingle).bam'),
+          mapWithBowtie2SingleReport,
+          mapWithSHRiMP2SingleReport,
+          mapWithGSNAPSingleReport),
+       regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|bwaMemReportSingle|SHRiMPReportSingle|GSNAPReportSingle).bam'),
        r'mut_trunc_sig.dir/\1.merged.bam')
 def mergeSingleReports(infiles, outfile):
 
@@ -260,7 +365,9 @@ def mergeSingleReports(infiles, outfile):
 #             mapWithSegemehlSingleReport),
 # Not run
 @transform((mapWithBWAMEMSingleReport,
-            mapWithBowtie2SingleReport),
+            mapWithBowtie2SingleReport,
+            mapWithSHRiMP2SingleReport,
+            mapWithGSNAPSingleReport),
            suffix('.bam'),
            add_inputs(mergeNucMtSequences),
            '.summariseAlignments.pickle')
@@ -285,25 +392,23 @@ def summariseMergedAlignments(infiles, outfile):
     '''
 
     infile, trna_fasta = infiles
-    print(infile)
+
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
 
 
 ###################################################
 # simulate reads
 ###################################################
-@mkdir('simulation_dummy_files')
-@originate(['simulation_dummy_files/%s' % x for x in range(0, PARAMS['simulation_n'])])
-def create_files(output_file):
-    with open(output_file, "w"):
-        pass
 
-#Not run
 @mkdir('simulations.dir')
-@transform(mergeNucMtSequences,
-           regex('.*/(\S+).fa'),
-           r'simulations.dir/\1.simulation_uniform.fastq.gz')
-def simulation_uniform_no_errors(infile, outfile):
+@transform(summariseMergedAlignments,
+           formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
+           add_inputs(mergeNucMtSequences),
+           'simulations.dir/{input_file[0]}.0.simulation_uniform.fastq.gz')
+def simulation_uniform(infile, outfile):
+
+    alignment_summary_picklefile = infiles[0][0]
+    infile = infiles[1]
 
     n_reads = int(PARAMS['simulation_uniform_reads'])
 
@@ -313,78 +418,24 @@ def simulation_uniform_no_errors(infile, outfile):
         for k,v in gt.items():
             out.write('%s\t%s\n' % (k, v))
 
-    simulateReads.simulate_reads(
-        infile,
-        outfile,
-        gt,
-        error_rate=0,
-        mutation_threshold=None,
-        truncate=False,
-        alignment_summary=None,
-        summary_level='anticodon')
-
-# not run
-@product(summariseMergedAlignments,
-         formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
-         create_files,
-         formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
-         'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withseqer.fastq.gz')
-def simulation_with_sequencing_errors(infiles, outfile):
-
-    alignment_summary_picklefile = infiles[0][0]
-    infile = infiles[1]
-
-    n_reads = int(PARAMS['simulation_withmut_reads'])
-
-    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-')
-
-    with open(outfile + '.gt', 'w') as out:
-        for k,v in gt.items():
-            out.write('%s\t%s\n' % (k, v))
-
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
     simulateReads.simulate_reads(
-        infile,
-        outfile,
-        gt,
-        error_rate=1/100,
-        mutation_threshold=None,
-        truncate=False,
-        alignment_summary=None,
-        summary_level='anticodon')
-
-
-@mkdir('simulations.dir')
-@product(summariseMergedAlignments,
-         formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
-         create_files,
-         formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
-         'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withmut.fastq.gz')
-def simulation_with_mutation_errors(infiles, outfile):
-
-    alignment_summary_picklefile = infiles[0][0]
-    infile = infiles[1]
-
-    n_reads = int(PARAMS['simulation_withmut_reads'])
-
-    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-')
-
-    alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
-
-    updated_gt = simulateReads.simulate_reads(
         infile,
         outfile,
         gt,
         error_rate=1/100,
         mutation_threshold=0.1,
-        truncate=False,
+        truncate=True,
         alignment_summary=alignment_summary,
         summary_level='anticodon')
 
-    with open(outfile + '.gt', 'w') as out:
-        for k,v in updated_gt.items():
-            out.write('%s\t%s\n' % (k, v))
+
+@mkdir('simulation_dummy_files')
+@originate(['simulation_dummy_files/%s' % x for x in range(0, PARAMS['simulation_n'])])
+def create_files(output_file):
+    with open(output_file, "w"):
+        pass
 
 @mkdir('simulations.dir')
 @product(summariseMergedAlignments,
@@ -421,12 +472,11 @@ def simulation_with_truncations(infiles, outfile):
 ###################################################
 # align
 ###################################################
+
+# not run
 @mkdir('quant.dir')
-# @transform((simulation_uniform_no_errors,
-#             simulation_with_sequencing_errors,
-#             simulation_with_mutation_errors,
-#             simulation_with_truncations),
-@transform(simulation_with_truncations,
+@transform((simulation_uniform,
+            simulation_with_truncations),
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBWAIndex),
            r'quant.dir/\1.\2.bwa.bam')
@@ -458,11 +508,8 @@ def alignWithBWA(infiles, outfile):
 
 
 @mkdir('quant.dir')
-# @transform((simulation_uniform_no_errors,
-#             simulation_with_sequencing_errors,
-#             simulation_with_mutation_errors,
-#             simulation_with_truncations),
-@transform(simulation_with_truncations,
+@transform((simulation_uniform,
+            simulation_with_truncations),
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBowtie2Index),
            r'quant.dir/\1.\2.bowtie2.bam')
@@ -496,35 +543,90 @@ def alignWithBowtie2(infiles, outfile):
     os.unlink(tmp_file)
 
 
-@mkdir('truth2assignment.dir')
-@transform((alignWithBWA,
-            alignWithBowtie2),
-           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-               r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
-def getTruth2Assignment(infile, outfile):
-    'Get the tally of ground truths to assignments'
-    CompareTrnaSeq.getTruth2Assignment(infile, outfile, submit=True)
+@mkdir('quant.dir')
+@transform((simulation_uniform,
+            simulation_with_truncations),
+           regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
+           add_inputs(mergeNucMtSequences),
+           r'quant.dir/\1.\2.shrimp.bam')
+def alignWithSHRiMP(infiles, outfile):
 
-@collate(getTruth2Assignment,
-         regex('truth2assignment.dir/(\S+)\.(\d+)\.(simulation_\S+)\.(\S+)\.truth2assignment.tsv'),
-         r'truth2assignment.dir/truth2assignment.\3.tsv')
-def mergeTruth2Assignment(infiles, outfile):
+    infile, trna_sequences = infiles
 
-    CompareTrnaSeq.mergeTruth2Assignment(infiles, outfile, submit=True)
+    bowtie2_index = iotools.snip(bowtie2_index, '.1.bt2')
 
-    infiles_anticodon  = [re.sub('.tsv$', '_anticodon.tsv', x) for x in infiles]
-    outfile_anticodon = re.sub('.tsv$', '_anticodon.tsv', outfile)
-    CompareTrnaSeq.mergeTruth2Assignment(infiles_anticodon, outfile_anticodon, submit=True)
+    tmp_file_fasta = P.get_temp_filename()
+    tmp_file_sam = P.get_temp_filename()
 
-    infiles_isodecoder  = [re.sub('.tsv$', '_isodecoder.tsv', x) for x in infiles]
-    outfile_isodecoder = re.sub('.tsv$', '_isodecoder.tsv', outfile)
-    CompareTrnaSeq.mergeTruth2Assignment(infiles_isodecoder, outfile_isodecoder, submit=True)
+    # Need to convert fastq to fasta for SHRiMP
+    statement = '''
+    zcat < %(infile)s |
+    sed 's/^@//g'|
+    paste - - - - |
+    awk 'BEGIN { FS="\\t" } {print ">"$1"\\n"$2}' >
+    %(tmp_file_fasta)s;
+
+    gmapper
+    %(tmp_file_fasta)s
+    %(trna_sequences)s
+    --strata  --report 1000
+    --sam-unaligned
+    --mode mirna
+    > %(tmp_file_sam)s
+    2> %(outfile)s.log ;
+    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
+    ''' % locals()
+
+    P.run(statement)
+
+    bam.filter_sam(tmp_file_sam, outfile)
+
+    os.unlink(tmp_file_fasta)
+    os.unlink(tmp_file_sam)
+
+
+@mkdir('quant.dir')
+@transform((simulation_uniform,
+            simulation_with_truncations),
+           regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
+           add_inputs(buildGSNAPIndex),
+           r'quant.dir/\1.\2.gsnap.bam')
+def alignWithGSNAP(infiles, outfile):
+
+    infile, gsnap_index = infiles
+
+    gsnap_index_dir = os.path.dirname(gsnap_index)
+    gsnap_index_base = os.path.basename(gsnap_index)
+
+    tmp_file = P.get_temp_filename()
+
+    statement = '''
+    gsnap
+    --gunzip
+    -D %(gsnap_index_dir)s
+    -d %(gsnap_index_base)s
+    --format sam
+    --genome-unk-mismatch 0
+    --ignore-trim-in-filtering 1
+    %(infile)s
+    -o %(tmp_file_sam)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
+    ''' % locals()
+
+    P.run(statement)
+
+    bam.filter_sam(tmp_file, outfile)
+
+    os.unlink(tmp_file)
 
 ###################################################
 # quantify
 ###################################################
-@transform((alignWithBWA,
-            alignWithBowtie2),
+
+@transform((alignWithBowtie2,
+            alignWithSHRiMP,
+            alignWithGSNAP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_individual',
            r'quant.dir/\1.\2.\3.gene_count_isodecoder',
@@ -540,8 +642,28 @@ def quantDiscreteCounts(infile, outfiles):
     outfile_anticodon,
     submit=True)
 
-@transform((alignWithBWA,
-            alignWithBowtie2),
+@transform((alignWithBowtie2,
+            alignWithSHRiMP,
+            alignWithGSNAP),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           [r'quant.dir/\1.\2.\3.gene_count_fractional_individual',
+           r'quant.dir/\1.\2.\3.gene_count_fractional_isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_fractional_anticodon'])
+def quantFractionalCounts(infile, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    CompareTrnaSeq.tally_read_counts(
+    infile,
+    outfile_individual,
+    outfile_isodecoder,
+    outfile_anticodon,
+    discrete=False,
+    submit=True)
+
+@transform((alignWithBowtie2,
+            alignWithSHRiMP,
+            alignWithGSNAP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_mapq10_individual',
            r'quant.dir/\1.\2.\3.gene_count_mapq10_isodecoder',
@@ -559,8 +681,9 @@ def quantDiscreteCountsMAPQ10(infile, outfiles):
     submit=True)
 
 
-@transform((alignWithBWA,
-            alignWithBowtie2),
+@transform((alignWithBowtie2,
+            alignWithSHRiMP,
+            alignWithGSNAP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(mergeNucMtSequences),
            r'quant.dir/\1.\2.\3/quant.sf')
@@ -587,7 +710,7 @@ def quantWithSalmon(infiles, outfile):
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon!
 @jobs_limit(1)
 @mkdir('mimseq.dir')
-@collate(simulation_with_truncations,
+@collate((simulation_uniform, simulation_with_truncations),
          regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
          r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
 def quantWithMimSeq(infiles, outfile):
@@ -643,7 +766,7 @@ def quantWithMimSeq(infiles, outfile):
 
 
 ###################################################
-# compare
+# compare ground truth and quantification estimates
 ###################################################
 @transform(quantWithMimSeq,
            regex('mimseq.dir/(\S+?)_(simulation_\S+)/counts/Anticodon_counts_raw.txt'),
@@ -662,6 +785,8 @@ def compareTruthEstimateMimseq(infiles, outfiles):
     truths = infiles[1:]
 
     CompareTrnaSeq.compareMimSeq(infile, truths, isodecoder_out, anticodon_out)
+
+
 
 @collate(compareTruthEstimateMimseq,
          regex('mimseq.dir/(\S+)\.(simulation_\S+)\.MimseqCompareTruthEstimateMimseqIsodecoder.tsv'),
@@ -719,21 +844,21 @@ def compareTruthEstimateSalmon(infiles, outfiles):
         infiles, outfile_individual, outfile_isodecoder, outfile_anticodon)
 
 
-@collate((quantDiscreteCounts, quantDiscreteCountsMAPQ10),
+@collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10),
          regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).(gene_count.*)_.*'),
          add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
-         [r'quant.dir/\2.\4_Discrete.CompareTruthEstimate.tsv',
-          r'quant.dir/\2.\4_Discrete.CompareTruthEstimateIsodecoder.tsv',
-          r'quant.dir/\2.\4_Discrete.CompareTruthEstimateAnticodon.tsv'])
-def compareTruthEstimateDiscreteCounts(infiles, outfiles):
+         [r'quant.dir/\2.\4_Decision.CompareTruthEstimate.tsv',
+          r'quant.dir/\2.\4_Decision.CompareTruthEstimateIsodecoder.tsv',
+          r'quant.dir/\2.\4_Decision.CompareTruthEstimateAnticodon.tsv'])
+def compareTruthEstimateDecisionCounts(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
-    CompareTrnaSeq.compareTruthEstimateDiscreteCounts(
+    CompareTrnaSeq.compareTruthEstimateDecisionCounts(
         infiles, outfile_individual, outfile_isodecoder, outfile_anticodon)
 
 
-@transform((compareTruthEstimateDiscreteCounts, compareTruthEstimateSalmon),
+@transform((compareTruthEstimateDecisionCounts, compareTruthEstimateSalmon),
            regex('quant.dir/(\S+).CompareTruthEstimate.tsv'),
            add_inputs(mergeMimSeqIsodecoderMaps),
            r'quant.dir/\1.CompareTruthEstimateMimseqIsodecoder.tsv')
@@ -742,7 +867,62 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
     mapping_file = infiles[1]
 
     CompareTrnaSeq.makeMimseqIsodecoderQuant(infile, mapping_file, outfile)
-# Function to merge comparisons for discrete, salmon-based and mimseq quant
+# Function to merge comparisons for decision, salmon-based and mimseq quant
+
+###################################################
+# Alignment confusion matrices
+###################################################
+@follows(compareTruthEstimateMimseq)
+@mkdir('truth2assignment.dir')
+@transform((alignWithBowtie2,
+            alignWithSHRiMP,
+            alignWithGSNAP),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           add_inputs(r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
+               r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
+def getTruth2Assignment(infile, outfile):
+    'Get the tally of ground truths to assignments'
+
+    infile, isodecoder_mapping = infiles
+
+    CompareTrnaSeq.getTruth2Assignment(infile, isodecoder_mapping, outfile, submit=True)
+
+
+@follows(compareTruthEstimateMimseq)
+@mkdir('truth2assignment.dir')
+@transform((simulation_uniform, simulation_with_truncations),
+           regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
+           add_inputs(r'mimseq.dir/\1_\3/counts/Isodecoder_counts_raw.txt', r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
+           r'truth2assignment.dir/\1_\2.\3.mimseq.truth2assignment.tsv')
+def getTruth2AssignmentMimSeq(infiles, outfile):
+    'Get the tally of ground truths to assignments'
+
+    infile, mimseq_isodecoder_counts, isodecoder_mapping = infiles
+    CompareTrnaSeq.getTruth2AssignmentMimSeq(
+        infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile, submit=True)
+
+
+@collate(getTruth2Assignment,
+         regex('truth2assignment.dir/(\S+)\.(\d+)\.(simulation_\S+)\.(\S+)\.truth2assignment.tsv'),
+         r'truth2assignment.dir/truth2assignment.\3.tsv')
+def mergeTruth2Assignment(infiles, outfile):
+
+    CompareTrnaSeq.mergeTruth2Assignment(infiles, outfile, submit=True)
+
+    infiles_anticodon  = [re.sub('.tsv$', '_anticodon.tsv', x) for x in infiles]
+    outfile_anticodon = re.sub('.tsv$', '_anticodon.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2Assignment(infiles_anticodon, outfile_anticodon, submit=True)
+
+    infiles_isodecoder  = [re.sub('.tsv$', '_isodecoder.tsv', x) for x in infiles]
+    # no isodecoder level output from mimseq
+    infiles_isodecoder = [x for x in infiles_isodecoder if os.path.exists(x)]
+    outfile_isodecoder = re.sub('.tsv$', '_isodecoder.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2Assignment(infiles_isodecoder, outfile_isodecoder, submit=True)
+
+    infiles_mimseq_isodecoder  = [re.sub('.tsv$', '_mimseq_isodecoder.tsv', x) for x in infiles]
+    outfile_mimseq_isodecoder = re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2Assignment(infiles_mimseq_isodecoder, outfile_mimseq_isodecoder, submit=True)
+####################################################
 
 # Plotting functions
 ###################################################
@@ -755,17 +935,8 @@ def build_input():
     pass
 
 
-@follows(summariseMergedAlignments)
-def summarise_alignments():
-    'learn the mutation & truncation signatures'
-    pass
-
-
-# @follows(simulation_uniform_no_errors,
-#          simulation_with_sequencing_errors,
-#          simulation_with_mutation_errors,
-#          simulation_with_truncations)
-@follows(simulation_with_truncations)
+@follows(simulation_uniform,
+          simulation_with_truncations)
 def simulate():
     'simulate tRNA reads from basic to more realistic'
     pass
@@ -786,7 +957,7 @@ def quant():
 
 @follows(getTruth2Assignment,
          compareTruthEstimateSalmon,
-         compareTruthEstimateDiscreteCounts,
+         compareTruthEstimateDecisionCounts,
          compareTruthEstimateMimseq,
          mergeCompareTruthEstimateMimseq,
          makeMimseqIsodecoderQuant)

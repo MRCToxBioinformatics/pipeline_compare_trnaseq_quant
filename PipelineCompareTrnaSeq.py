@@ -30,7 +30,7 @@ def summariseAlignments(infile, trna_fasta, outfile):
 
 
 @cluster_runnable
-def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfile_anticodon, min_mapq=0):
+def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfile_anticodon, min_mapq=0, discrete=True):
 
     inbam = pysam.Samfile(bam_infile, 'r')
 
@@ -58,11 +58,24 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
             anticodons = set([re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in assignments])
             isodecoders = set(['-'.join(x.split('-')[0:4]) for x in assignments])
 
-            if len(anticodons)==1:
-                read_counts['anticodon'][anticodons.pop()] +=1
+            if discrete:
+                if len(anticodons)==1:
+                    read_counts['anticodon'][anticodons.pop()] +=1
 
-            if len(isodecoders)==1:
-                read_counts['isodecoder'][isodecoders.pop()] +=1
+                if len(isodecoders)==1:
+                    read_counts['isodecoder'][isodecoders.pop()] +=1
+            else:
+                n_isodecoders = len(isodecoders)
+                fractional_assignment_isodecoders = 1/isodecoders
+
+                for isodecoder in isodecoders:
+                    read_counts['isodecoder'][isodecoders] += fractional_assignment_isodecoders
+
+                n_anticodons = len(anticodons)
+                fractional_assignment_anticodons = 1/n_anticodons
+
+                for anticodon in anticodons:
+                    read_counts['anticodon'][anticodon] += fractional_assignment_anticodons
 
     with open(outfile_individual, 'w') as outf:
         for k,v in read_counts['individual_sequence'].items():
@@ -221,7 +234,7 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
 
 
 
-def mergeDiscreteEstimateWithTruth(truth, estimate_infile, input_file, simulation_n, quant_method):
+def mergeDecisionEstimateWithTruth(truth, estimate_infile, input_file, simulation_n, quant_method):
     estimate_counts = pd.read_csv(estimate_infile , sep='\t', header=None,
                                   names=['Name', 'NumReads'])
     counts_vs_truth = pd.merge(estimate_counts, truth, on='Name', how='right')
@@ -232,10 +245,12 @@ def mergeDiscreteEstimateWithTruth(truth, estimate_infile, input_file, simulatio
     counts_vs_truth['quant_method']=quant_method
     return(counts_vs_truth)
 
-truth2assignment = defaultdict(Counter)
+
 
 @cluster_runnable
-def getTruth2Assignment(infile, outfile):
+def getTruth2Assignment(infile, isodecoder_mapping, outfile):
+
+    truth2assignment = defaultdict(Counter)
 
     for read_group in bam.iterate_reads(pysam.Samfile(infile)):
 
@@ -272,6 +287,65 @@ def getTruth2Assignment(infile, outfile):
     t2a_df_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
     t2a_df_isodecoder.to_csv(re.sub('.tsv$', '_isodecoder.tsv', outfile), sep='\t')
 
+    # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
+    trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
+    trna2isodecoder = {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])}
+
+    t2a_df['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df['truth']]
+    t2a_df['assignment_isodecoder'] = [trna2isodecoder[x] for x in t2a_df['assignment']]
+
+    t2a_df_mimseq_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
+    t2a_df_mimseq_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
+
+#@cluster_runnable
+def getTruth2AssignmentMimSeq(infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile):
+
+
+    truth2assignment = defaultdict(Counter)
+
+    for read in pysam.Samfile(infile):
+        assignment = read.reference_name
+
+        if read.reference_name is None:
+            continue
+
+        # all the read group queries are the same,
+        # so just take one and strip the trailing '_x',
+        # where x can be any length number
+        truth = re.sub('-\d+_\d+$', '', read.query_name)
+
+        truth2assignment[truth][assignment] += 1
+
+    with open(outfile, 'w') as outf:
+        outf.write('\t'.join(('truth', 'assignment', 'count')) + '\n')
+        for k,v in truth2assignment.items():
+            for k2, c in v.items():
+                outf.write('\t'.join(map(str, (k, k2, c))) + '\n')
+
+    t2a_df = pd.read_csv(outfile, sep='\t')
+
+    t2a_df['truth_anticodon'] = [
+        re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in t2a_df['truth']]
+
+    t2a_df['assignment_anticodon'] = [
+        re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA').replace('mito_', 'MT')) for x in t2a_df['assignment']]
+
+    t2a_df_anticodon = t2a_df.groupby(['truth_anticodon', 'assignment_anticodon']).agg({'count':'sum'}).reset_index()
+    t2a_df_anticodon.to_csv(re.sub('.tsv$', '_anticodon.tsv', outfile), sep='\t', index=False)
+
+    mimseq_isodecoder_table = pd.read_csv(mimseq_isodecoder_counts, sep='\t')
+    parent2isodecoder = {p:i for i,p in zip(mimseq_isodecoder_table['isodecoder'], mimseq_isodecoder_table['parent'])}
+
+    trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
+    trna2isodecoder = {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])}
+
+    t2a_df['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df['truth']]
+    t2a_df['assignment_isodecoder'] = [parent2isodecoder[re.sub('-\d$', '', x)] for x in t2a_df['assignment']]
+
+    t2a_df_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
+    t2a_df_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
+
+
 @cluster_runnable
 def mergeTruth2Assignment(infiles, outfile):
     dfs = []
@@ -289,6 +363,7 @@ def mergeTruth2Assignment(infiles, outfile):
 
     df = pd.concat(dfs)
     df.to_csv(outfile, sep='\t')
+
 
 def compareTruthEstimateSalmon(
     infiles, outfile_individual, outfile_isodecoder, outfile_anticodon):
@@ -335,7 +410,7 @@ def compareTruthEstimateSalmon(
 
 
 
-def compareTruthEstimateDiscreteCounts(infiles, outfile_individual, outfile_isodecoder, outfile_anticodon):
+def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isodecoder, outfile_anticodon):
     all_counts_vs_truth = {'individual':[], 'isodecoder':[], 'anticodon':[]}
 
     for infile_set in infiles:
@@ -346,7 +421,7 @@ def compareTruthEstimateDiscreteCounts(infiles, outfile_individual, outfile_isod
 
         input_file = os.path.basename(truth).split('.')[0]
         simulation_n = os.path.basename(truth).split('.')[1]
-        quant_method = os.path.basename(estimate_individual).split('.')[-2] + '_discrete'
+        quant_method = os.path.basename(estimate_individual).split('.')[-2] + '_decision'
 
         if 'mapq10' in estimate_individual:
             quant_method += '_mapq10'
@@ -354,7 +429,7 @@ def compareTruthEstimateDiscreteCounts(infiles, outfile_individual, outfile_isod
         truth_counts = pd.read_csv(truth, sep='\t', header=None,
                                    names=['Name', 'truth'])
 
-        counts_vs_truth = mergeDiscreteEstimateWithTruth(
+        counts_vs_truth = mergeDecisionEstimateWithTruth(
             truth_counts, estimate_individual, input_file, simulation_n, quant_method)
 
         all_counts_vs_truth['individual'].append(counts_vs_truth)
@@ -363,7 +438,7 @@ def compareTruthEstimateDiscreteCounts(infiles, outfile_individual, outfile_isod
         truth_counts_isodecoder = truth_counts.groupby(
             ['Name']).agg(
                 {'truth':'sum'}).reset_index()
-        counts_vs_truth_isodecoder = mergeDiscreteEstimateWithTruth(
+        counts_vs_truth_isodecoder = mergeDecisionEstimateWithTruth(
             truth_counts_isodecoder, estimate_isodecoder, input_file, simulation_n, quant_method)
         all_counts_vs_truth['isodecoder'].append(counts_vs_truth_isodecoder)
 
@@ -371,7 +446,7 @@ def compareTruthEstimateDiscreteCounts(infiles, outfile_individual, outfile_isod
         truth_counts_anticodon = truth_counts.groupby(
             ['Name']).agg(
                 {'truth':'sum'}).reset_index()
-        counts_vs_truth_anticodon = mergeDiscreteEstimateWithTruth(
+        counts_vs_truth_anticodon = mergeDecisionEstimateWithTruth(
             truth_counts_anticodon, estimate_anticodon, input_file, simulation_n, quant_method)
         all_counts_vs_truth['anticodon'].append(counts_vs_truth_anticodon)
 
@@ -397,7 +472,7 @@ def makeMimseqIsodecoderQuant(infile, mapping_file, outfile):
 
     isodecoder_quant = isodecoder_quant.merge(isodecoder_mapping,
                                               left_on=['Name', 'trna_method'],
-                                              right_on=['isodecoder', 'trna_method'])
+                                                  right_on=['isodecoder', 'trna_method'])
 
     mimseq_isodecoder_quant = isodecoder_quant.groupby(
             ['mimseq_isodecoder', 'input_file', 'simulation_n', 'quant_method']).agg(
