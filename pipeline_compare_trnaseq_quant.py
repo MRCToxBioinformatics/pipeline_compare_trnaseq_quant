@@ -53,10 +53,6 @@ import pysam
 from cgatcore import pipeline as P
 import cgatcore.iotools as iotools
 
-# import module for RNASeq functions. Allows absraction of the pipeline task
-# and re-use of core functions
-# import ModuleRNASeq as RNASeq
-
 import simulatetrna.alignmentSummary as alignmentSummary
 import simulatetrna.simulateReads as simulateReads
 import simulatetrna.fasta as fasta
@@ -67,8 +63,6 @@ import PipelineCompareTrnaSeq as CompareTrnaSeq
 PARAMS = P.get_parameters(
     ["%s/pipeline.yml" % os.path.splitext(__file__)[0],
     "pipeline.yml"])
-
-conda_base_env = PARAMS['conda_base_env']
 
 # Helper functions mapping tracks to conditions, etc
 # determine the location of the input files (reads).
@@ -88,7 +82,6 @@ SEQUENCEFILES = tuple([os.path.join(PARAMS["input"], suffix_name)
                        for suffix_name in SEQUENCESUFFIXES])
 
 SEQUENCEFILES_REGEX = regex(r"(.*\/)*(\S+).(fastq.1.gz|fastq.gz|fastq)")
-
 
 ###################################################
 # Prepare inputs
@@ -118,8 +111,7 @@ def buildBWAIndex(infile, outfile):
     prefix = iotools.snip(outfile, '.bwt')
     statement = 'bwa index -p %(prefix)s %(infile)s' % locals()
 
-    # Very small task so running locally is OK, even on HPC!
-    P.run(statement, submit=False)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
 
 @transform(mergeNucMtSequences,
@@ -131,8 +123,7 @@ def buildBowtie2Index(infile, outfile):
     outfile_base = iotools.snip(outfile, '.1.bt2')
     statement = 'bowtie2-build %(infile)s %(outfile_base)s' % locals()
 
-    # Very small task so running locally is OK, even on HPC!
-    P.run(statement, submit=False)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'], submit=False)
 
 @transform(mergeNucMtSequences,
            regex('.*/(\S+).fa'),
@@ -146,7 +137,7 @@ def buildGSNAPIndex(infile, outfile):
     statement = 'gmap_build -q 1 -D %(outdir)s -d %(outfile_base)s %(infile)s' % locals()
 
     # Very small task so running locally is OK, even on HPC!
-    P.run(statement, submit=False)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'], submit=False)
 
 
 @transform(mergeNucMtSequences,
@@ -158,7 +149,7 @@ def buildSegemehlIndex(infile, outfile):
     statement = 'segemehl.x -x %(outfile)s -d %(infile)s' % locals()
 
     # Very small task so running locally is OK, even on HPC!
-    P.run(statement, submit=False)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'], submit=False)
 
 ###################################################
 # Learn mutation and truncation signatures
@@ -191,7 +182,7 @@ def mapWithBWAMEMSingleReport(infiles, outfile):
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
 
 @mkdir('mut_trunc_sig.dir')
@@ -227,7 +218,7 @@ def mapWithBowtie2SingleReport(infiles, outfile):
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
 SEQUENCEFILES_REGEX2 = regex(r"(.*\/)*(YAMATseq_BT20_A).(fastq.1.gz|fastq.gz|fastq)")
 
@@ -264,7 +255,7 @@ def mapWithGSNAPSingleReport(infiles, outfile):
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
     bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
     pysam.sort(tmp_file_single_sam, "-o", outfile)
@@ -313,7 +304,7 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
 
     job_options = PARAMS['cluster_options'] + " -t 3:00:00"
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
     bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
     pysam.sort(tmp_file_single_sam, "-o", outfile)
@@ -353,7 +344,7 @@ def mapWithSegemehlSingleReport(infiles, outfile):
     rm -f %(tmp_file)s
     ''' % locals()
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
 
 @collate((mapWithBWAMEMSingleReport,
@@ -374,7 +365,7 @@ def mergeSingleReports(infiles, outfile):
     rm -f %(tmp_file)s
     ''' % locals()
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
 
 @transform((mapWithBWAMEMSingleReport,
@@ -511,7 +502,7 @@ def alignWithBWA(infiles, outfile):
     samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
     '''
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
     bam.filter_sam(tmp_file, outfile)
 
@@ -547,7 +538,7 @@ def alignWithBowtie2(infiles, outfile):
     samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
     ''' % locals()
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
     bam.filter_sam(tmp_file, outfile)
 
@@ -591,7 +582,7 @@ def alignWithSHRiMP(infiles, outfile):
     samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
     ''' % locals()
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
     bam.filter_sam(tmp_file_sam, outfile)
 
@@ -628,7 +619,7 @@ def alignWithGSNAP(infiles, outfile):
     samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
     ''' % locals()
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
     bam.filter_sam(tmp_file, outfile)
 
@@ -714,7 +705,7 @@ def quantWithSalmon(infiles, outfile):
     -o %(outfile_dir)s;
     '''
 
-    P.run(statement)
+    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
 
 
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon!
