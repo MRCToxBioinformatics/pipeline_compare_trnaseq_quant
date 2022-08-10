@@ -435,10 +435,6 @@ def simulation_uniform(infiles, outfile):
 
     gt = simulateReads.make_gt(infile, n_reads, 1, 0, filter='\-Und\-')
 
-    with open(outfile + '.gt', 'w') as out:
-        for k,v in gt.items():
-            out.write('%s\t%s\n' % (k, v))
-
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
@@ -454,7 +450,8 @@ def simulation_uniform(infiles, outfile):
         truncate=True,
         alignment_summary=alignment_summary,
         summary_level='anticodon',
-        submit=True)
+        submit=True,
+        outfile_gt=outfile + '.gt')
 
 
 @mkdir('simulation_dummy_files')
@@ -484,7 +481,7 @@ def simulation_with_truncations(infiles, outfile):
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
-    updated_gt = CompareTrnaSeq.simulate_reads(
+    CompareTrnaSeq.simulate_reads(
         infile=infile,
         outfile=outfile,
         ground_truth=gt,
@@ -493,11 +490,10 @@ def simulation_with_truncations(infiles, outfile):
         truncate=True,
         alignment_summary=alignment_summary,
         summary_level='anticodon',
-        submit=True)
+        submit=True,
+        outfile_gt=outfile +'.gt')
 
-    with open(outfile + '.gt', 'w') as out:
-        for k,v in updated_gt.items():
-            out.write('%s\t%s\n' % (k, v))
+
 
 ###################################################
 # align
@@ -966,7 +962,7 @@ def mergeTruth2Assignment(infiles, outfile):
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
     job_condaenv=PARAMS['conda_base_env']
-    
+
     CompareTrnaSeq.mergeTruth2Assignment(infiles, outfile, submit=True)
 
     infiles_anticodon  = [re.sub('.tsv$', '_anticodon.tsv', x) for x in infiles]

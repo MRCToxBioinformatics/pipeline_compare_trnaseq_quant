@@ -64,13 +64,17 @@ def simulate_reads(infile,
                    mutation_threshold,
                    truncate,
                    alignment_summary,
-                   summary_level):
+                   summary_level,
+                   outfile_gt=None):
 
     ground_truth = simulateReads.simulate_reads(
         infile, outfile, ground_truth, error_rate,
         mutation_threshold, truncate, alignment_summary, summary_level)
 
-    return(ground_truth)
+    if outfile_gt is not None:
+        with open(outfile_gt, 'w') as out:
+            for k,v in updated_gt.items():
+                out.write('%s\t%s\n' % (k, v))
 
 @cluster_runnable
 def keep_random_alignment(tmp_file_sam, tmp_file_single_sam, outfile):
@@ -103,7 +107,7 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
 
     for read_group in bam.iterate_reads(inbam):
 
-        assignments = set([read.reference_name for read in read_group if read.reference_name is not None and read.mapq>min_mapq])
+        assignments = set([read.reference_name for read in read_group if read.reference_name is not None and read.mapq>=min_mapq])
 
         # No assignments for read after filtering
         if len(assignments) == 0:
