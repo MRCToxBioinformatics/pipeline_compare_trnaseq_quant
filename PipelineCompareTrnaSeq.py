@@ -1,3 +1,4 @@
+import simulatetrna.simulateReads as simulateReads
 import simulatetrna.alignmentSummary as alignmentSummary
 import simulatetrna.bam as bam
 from cgatcore.pipeline import cluster_runnable
@@ -14,6 +15,68 @@ def updateMtFastaNaming(infile, outfile):
             _, species, __, aa, ac = trna_record.id.split('|')
             trna_record.id = '-'.join([species + '_MTtRNA', aa, ac, '1', '1'])
             SeqIO.write(trna_record, outf, "fasta")
+
+@cluster_runnable
+def mergeMimSeqIsodecoderMaps(infiles, outfile):
+
+    isodecoder_maps = []
+    for mapping_file in infiles:
+        isodecoder_mapping = pd.read_csv(
+            mapping_file + '.mapping', sep='\t', header=None, names=['isodecoder','mimseq_isodecoder'])
+        isodecoder_mapping['trna_method'] = os.path.basename(mapping_file).split('.')[0]
+        isodecoder_maps.append(isodecoder_mapping)
+
+    isodecoder_maps = pd.concat(isodecoder_maps)
+
+    isodecoder_maps.to_csv(outfile, sep='\t', index=False)
+
+def cat_mimseq_compare_files(infiles, outfile):
+    with open(outfile, 'w') as outf:
+        out_header = True
+        for fn in infiles:
+            with open(fn, 'r') as inf:
+                header = next(inf)
+                if out_header:
+                    outf.write(header)
+                    out_header = False
+                for line in inf:
+                    outf.write(line)
+
+@cluster_runnable
+def mergeCompareTruthEstimateMimseq(infiles_isodecoder, outfile_isodecoder,
+                                    infiles_anticodon, outfile_anticodon):
+    outfile_isodecoder, outfile_anticodon = outfiles
+    infiles_isodecoder = [x[0] for x in infiles]
+    infiles_anticodon = [x[1] for x in infiles]
+
+    cat_mimseq_compare_files(infiles_isodecoder, outfile_isodecoder)
+    cat_mimseq_compare_files(infiles_anticodon, outfile_anticodon)
+
+@cluster_runnable
+def filter_sam(tmp_file, outfile):
+    bam.filter_sam(tmp_file, outfile)
+
+@cluster_runnable
+def simulate_reads(infile,
+                   outfile,
+                   ground_truth,
+                   error_rate,
+                   mutation_threshold,
+                   truncate,
+                   alignment_summary,
+                   summary_level):
+
+    ground_truth = simulateReads.simulate_reads(
+        infile, outfile, ground_truth, error_rate,
+        mutation_threshold, truncate, alignment_summary, summary_level)
+
+    return(ground_truth)
+
+@cluster_runnable
+def keep_random_alignment(tmp_file_sam, tmp_file_single_sam, outfile):
+    bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
+    pysam.sort(tmp_file_single_sam, "-o", outfile)
+    pysam.index(outfile)
 
 @cluster_runnable
 def summariseAlignments(infile, trna_fasta, outfile):
@@ -106,6 +169,7 @@ def readMimSeqQuant(infile, drop_cols, melt_cols):
     mimseq_quant['quant_method']='mimseq'
     return(mimseq_quant)
 
+@cluster_runnable
 def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
     '''
     Compare mimseq quant with ground truth at isodecoder and anticodon level
@@ -297,9 +361,8 @@ def getTruth2Assignment(infile, isodecoder_mapping, outfile):
     t2a_df_mimseq_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
     t2a_df_mimseq_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
 
-#@cluster_runnable
+@cluster_runnable
 def getTruth2AssignmentMimSeq(infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile):
-
 
     truth2assignment = defaultdict(Counter)
 
@@ -364,7 +427,7 @@ def mergeTruth2Assignment(infiles, outfile):
     df = pd.concat(dfs)
     df.to_csv(outfile, sep='\t')
 
-
+@cluster_runnable
 def compareTruthEstimateSalmon(
     infiles, outfile_individual, outfile_isodecoder, outfile_anticodon):
 
@@ -409,7 +472,7 @@ def compareTruthEstimateSalmon(
     all_counts_vs_truth_ac.to_csv(outfile_anticodon, sep='\t', index=False)
 
 
-
+@cluster_runnable
 def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isodecoder, outfile_anticodon):
     all_counts_vs_truth = {'individual':[], 'isodecoder':[], 'anticodon':[]}
 
@@ -461,7 +524,7 @@ def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isod
     all_counts_vs_truth_anticodon.to_csv(outfile_anticodon, sep='\t', index=False)
 
 
-
+@cluster_runnable
 def makeMimseqIsodecoderQuant(infile, mapping_file, outfile):
 
     isodecoder_mapping = pd.read_csv(mapping_file, sep='\t')

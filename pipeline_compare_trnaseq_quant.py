@@ -111,7 +111,9 @@ def buildBWAIndex(infile, outfile):
     prefix = iotools.snip(outfile, '.bwt')
     statement = 'bwa index -p %(prefix)s %(infile)s' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
 
 
 @transform(mergeNucMtSequences,
@@ -121,9 +123,12 @@ def buildBowtie2Index(infile, outfile):
     'Index the tRNA sequences for Bowtie2'
 
     outfile_base = iotools.snip(outfile, '.1.bt2')
+
     statement = 'bowtie2-build %(infile)s %(outfile_base)s' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'], submit=False)
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
 
 @transform(mergeNucMtSequences,
            regex('.*/(\S+).fa'),
@@ -136,8 +141,9 @@ def buildGSNAPIndex(infile, outfile):
 
     statement = 'gmap_build -q 1 -D %(outdir)s -d %(outfile_base)s %(infile)s' % locals()
 
-    # Very small task so running locally is OK, even on HPC!
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'], submit=False)
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
 
 
 @transform(mergeNucMtSequences,
@@ -148,8 +154,9 @@ def buildSegemehlIndex(infile, outfile):
 
     statement = 'segemehl.x -x %(outfile)s -d %(infile)s' % locals()
 
-    # Very small task so running locally is OK, even on HPC!
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'], submit=False)
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
 
 ###################################################
 # Learn mutation and truncation signatures
@@ -181,8 +188,9 @@ def mapWithBWAMEMSingleReport(infiles, outfile):
     ''' % locals()
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    P.run(statement)
 
 
 @mkdir('mut_trunc_sig.dir')
@@ -217,8 +225,9 @@ def mapWithBowtie2SingleReport(infiles, outfile):
     ''' % locals()
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    P.run(statement)
 
 SEQUENCEFILES_REGEX2 = regex(r"(.*\/)*(YAMATseq_BT20_A).(fastq.1.gz|fastq.gz|fastq)")
 
@@ -254,12 +263,11 @@ def mapWithGSNAPSingleReport(infiles, outfile):
     ''' % locals()
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    P.run(statement)
 
-    bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
-    pysam.sort(tmp_file_single_sam, "-o", outfile)
-    pysam.index(outfile)
+    CompareTrnaSeq.keep_random_alignment(tmp_file_sam, tmp_file_single_sam, outfile)
 
     os.unlink(tmp_file_sam)
     os.unlink(tmp_file_single_sam)
@@ -303,12 +311,11 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     ''' % locals()
 
     job_options = PARAMS['cluster_options'] + " -t 3:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    P.run(statement)
 
-    bam.keep_random_alignment(tmp_file_sam, tmp_file_single_sam)
-    pysam.sort(tmp_file_single_sam, "-o", outfile)
-    pysam.index(outfile)
+    CompareTrnaSeq.keep_random_alignment(tmp_file_sam, tmp_file_single_sam, outfile)
 
     os.unlink(tmp_file_fasta)
     os.unlink(tmp_file_sam)
@@ -344,7 +351,10 @@ def mapWithSegemehlSingleReport(infiles, outfile):
     rm -f %(tmp_file)s
     ''' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_options = PARAMS['cluster_options'] + " -t 5:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
 
 
 @collate((mapWithBWAMEMSingleReport,
@@ -365,7 +375,10 @@ def mergeSingleReports(infiles, outfile):
     rm -f %(tmp_file)s
     ''' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
 
 
 @transform((mapWithBWAMEMSingleReport,
@@ -382,6 +395,9 @@ def summariseIndividualAlignments(infiles, outfile):
 
     infile, trna_fasta = infiles
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
 
 @transform(mergeSingleReports,
@@ -395,6 +411,9 @@ def summariseMergedAlignments(infiles, outfile):
     '''
 
     infile, trna_fasta = infiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
 
@@ -422,15 +441,20 @@ def simulation_uniform(infiles, outfile):
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
-    simulateReads.simulate_reads(
-        infile,
-        outfile,
-        gt,
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+
+    CompareTrnaSeq.simulate_reads(
+        infile=infile,
+        outfile=outfile,
+        ground_truth=gt,
         error_rate=1/100,
         mutation_threshold=0.1,
         truncate=True,
         alignment_summary=alignment_summary,
-        summary_level='anticodon')
+        summary_level='anticodon',
+        submit=True)
 
 
 @mkdir('simulation_dummy_files')
@@ -457,15 +481,19 @@ def simulation_with_truncations(infiles, outfile):
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
-    updated_gt = simulateReads.simulate_reads(
-        infile,
-        outfile,
-        gt,
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    updated_gt = CompareTrnaSeq.simulate_reads(
+        infile=infile,
+        outfile=outfile,
+        ground_truth=gt,
         error_rate=1/100,
         mutation_threshold=0.1,
         truncate=True,
         alignment_summary=alignment_summary,
-        summary_level='anticodon')
+        summary_level='anticodon',
+        submit=True)
 
     with open(outfile + '.gt', 'w') as out:
         for k,v in updated_gt.items():
@@ -502,9 +530,12 @@ def alignWithBWA(infiles, outfile):
     samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
     '''
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    bam.filter_sam(tmp_file, outfile)
+    P.run(statement)
+
+    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True)
 
     os.unlink(tmp_file)
 
@@ -538,9 +569,12 @@ def alignWithBowtie2(infiles, outfile):
     samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
     ''' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    bam.filter_sam(tmp_file, outfile)
+    P.run(statement)
+
+    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True)
 
     os.unlink(tmp_file)
 
@@ -582,10 +616,12 @@ def alignWithSHRiMP(infiles, outfile):
     samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
     ''' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    bam.filter_sam(tmp_file_sam, outfile)
+    P.run(statement)
 
+    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True)
     os.unlink(tmp_file_fasta)
     os.unlink(tmp_file_sam)
 
@@ -619,9 +655,12 @@ def alignWithGSNAP(infiles, outfile):
     samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
     ''' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    bam.filter_sam(tmp_file, outfile)
+    P.run(statement)
+
+    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True)
 
     os.unlink(tmp_file)
 
@@ -638,6 +677,9 @@ def alignWithGSNAP(infiles, outfile):
 def quantDiscreteCounts(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.tally_read_counts(
     infile,
@@ -656,6 +698,9 @@ def quantFractionalCounts(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.tally_read_counts(
     infile,
     outfile_individual,
@@ -673,6 +718,9 @@ def quantFractionalCounts(infile, outfiles):
 def quantDiscreteCountsMAPQ10(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.tally_read_counts(
     infile,
@@ -704,8 +752,10 @@ def quantWithSalmon(infiles, outfile):
     -a %(infile)s
     -o %(outfile_dir)s;
     '''
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    P.run(statement, job_condaenv=PARAMS['conda_base_env'])
+    P.run(statement)
 
 
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon!
@@ -763,7 +813,10 @@ def quantWithMimSeq(infiles, outfile):
     mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
     ''' % locals()
 
-    P.run(statement, job_condaenv=PARAMS['mimseq_conda_env_name'])
+    job_options = PARAMS['cluster_options'] + " -t 3:00:00"
+    job_condaenv=PARAMS['mimseq_conda_env_name']
+
+    P.run(statement)
 
 
 ###################################################
@@ -785,7 +838,10 @@ def compareTruthEstimateMimseq(infiles, outfiles):
     infile = infiles[0]
     truths = infiles[1:]
 
-    CompareTrnaSeq.compareMimSeq(infile, truths, isodecoder_out, anticodon_out)
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.compareMimSeq(infile, truths, isodecoder_out, anticodon_out, submit=True)
 
 
 
@@ -798,38 +854,23 @@ def mergeCompareTruthEstimateMimseq(infiles, outfiles):
     infiles_isodecoder = [x[0] for x in infiles]
     infiles_anticodon = [x[1] for x in infiles]
 
-    def cat_files(infiles, outfile):
-        with open(outfile, 'w') as outf:
-            out_header = True
-            for fn in infiles:
-                with open(fn, 'r') as inf:
-                    header = next(inf)
-                    if out_header:
-                        outf.write(header)
-                        out_header = False
-                    for line in inf:
-                        outf.write(line)
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    cat_files(infiles_isodecoder, outfile_isodecoder)
-    cat_files(infiles_anticodon, outfile_anticodon)
+    CompareTrnaSeq.mergeCompareTruthEstimateMimseq(
+        infiles_isodecoder, outfile_isodecoder, infiles_anticodon, outfile_anticodon, submit=True)
 
 
 @merge(compareTruthEstimateMimseq,
        'quant.dir/mimseq_isodecoder_maps.tsv')
 def mergeMimSeqIsodecoderMaps(infiles, outfile):
 
-    isodecoder_maps = []
     infiles = [x[0] for x in infiles]
 
-    for mapping_file in infiles:
-        isodecoder_mapping = pd.read_csv(
-            mapping_file + '.mapping', sep='\t', header=None, names=['isodecoder','mimseq_isodecoder'])
-        isodecoder_mapping['trna_method'] = os.path.basename(mapping_file).split('.')[0]
-        isodecoder_maps.append(isodecoder_mapping)
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
-    isodecoder_maps = pd.concat(isodecoder_maps)
-
-    isodecoder_maps.to_csv(outfile, sep='\t', index=False)
+    CompareTrnaSeq.mergeMimSeqIsodecoderMaps(infiles, outfile, submit=True)
 
 @collate(quantWithSalmon,
        regex(r'quant.dir/(\S+)\.(\S+).(simulation_\S+)\.(\S+)/quant.sf'),
@@ -841,8 +882,11 @@ def compareTruthEstimateSalmon(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.compareTruthEstimateSalmon(
-        infiles, outfile_individual, outfile_isodecoder, outfile_anticodon)
+        infiles, outfile_individual, outfile_isodecoder, outfile_anticodon, submit=True)
 
 
 @collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10),
@@ -855,8 +899,11 @@ def compareTruthEstimateDecisionCounts(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.compareTruthEstimateDecisionCounts(
-        infiles, outfile_individual, outfile_isodecoder, outfile_anticodon)
+        infiles, outfile_individual, outfile_isodecoder, outfile_anticodon, submit=True)
 
 
 @transform((compareTruthEstimateDecisionCounts, compareTruthEstimateSalmon),
@@ -867,7 +914,10 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
     infile = infiles[0][1]
     mapping_file = infiles[1]
 
-    CompareTrnaSeq.makeMimseqIsodecoderQuant(infile, mapping_file, outfile)
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.makeMimseqIsodecoderQuant(infile, mapping_file, outfile, submit=True)
 # Function to merge comparisons for decision, salmon-based and mimseq quant
 
 ###################################################
@@ -885,6 +935,9 @@ def getTruth2Assignment(infile, outfile):
 
     infile, isodecoder_mapping = infiles
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.getTruth2Assignment(infile, isodecoder_mapping, outfile, submit=True)
 
 
@@ -898,6 +951,10 @@ def getTruth2AssignmentMimSeq(infiles, outfile):
     'Get the tally of ground truths to assignments'
 
     infile, mimseq_isodecoder_counts, isodecoder_mapping = infiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.getTruth2AssignmentMimSeq(
         infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile, submit=True)
 
@@ -907,6 +964,9 @@ def getTruth2AssignmentMimSeq(infiles, outfile):
          r'truth2assignment.dir/truth2assignment.\3.tsv')
 def mergeTruth2Assignment(infiles, outfile):
 
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+    
     CompareTrnaSeq.mergeTruth2Assignment(infiles, outfile, submit=True)
 
     infiles_anticodon  = [re.sub('.tsv$', '_anticodon.tsv', x) for x in infiles]
