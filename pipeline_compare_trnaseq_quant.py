@@ -290,7 +290,7 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     tmp_file_single_sam = P.get_temp_filename()
 
     threads = PARAMS['shrimp_threads']
-    
+
     # Need to convert fastq to fasta for SHRiMP
     statement = '''
     zcat < %(infile)s |
@@ -356,26 +356,30 @@ def mapWithSegemehlSingleReport(infiles, outfile):
     P.run(statement)
 
 
-@collate((mapWithBowtie2SingleReport,
-          mapWithSHRiMP2SingleReport,
-          mapWithGSNAPSingleReport),
-       regex('mut_trunc_sig.dir/(\S+)_(bowtie2ReportSingle|SHRiMPReportSingle|GSNAPReportSingle).bam'),
+@collate((mapWithBWAMEMSingleReport,
+          mapWithBowtie2SingleReport,
+          mapWithSHRiMP2SingleReport),
+       regex('mut_trunc_sig.dir/(\S+)_(bwaMemReportSingle|bowtie2ReportSingle|SHRiMPReportSingle).bam'),
        r'mut_trunc_sig.dir/\1.merged.bam')
 def mergeSingleReports(infiles, outfile):
 
     infiles = ' '.join(infiles)
 
+    tmp_file = P.get_temp_filename()
+
     statement = '''
-    samtools merge -f -o %(outfile)s %(infiles)s;
-    samtools index %(outfile)s
+    samtools merge -f -o %(tmp_file)s %(infiles)s;
+    samtools sort %(tmp_file)s > %(outfile)s;
+    samtools index %(outfile)s;
+    rm -f %(tmp_file)s
     ''' % locals()
 
     P.run(statement)
 
 
-@transform((mapWithBowtie2SingleReport,
-            mapWithSHRiMP2SingleReport,
-            mapWithGSNAPSingleReport),
+@transform((mapWithBWAMEMSingleReport,
+            mapWithBowtie2SingleReport,
+            mapWithSHRiMP2SingleReport,),
            suffix('.bam'),
            add_inputs(mergeNucMtSequences),
            '.summariseAlignments.pickle')
@@ -398,7 +402,7 @@ def summariseMergedAlignments(infiles, outfile):
     Use alignmentSummary.clustalwtrnaAlignmentSummary class to summarise the
     merged alignments and learn the mutational & truncation signatures
     '''
-
+    
     infile, trna_fasta = infiles
 
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
@@ -413,7 +417,7 @@ def summariseMergedAlignments(infiles, outfile):
            formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
            add_inputs(mergeNucMtSequences),
            'simulations.dir/{input_file[0]}.0.simulation_uniform.fastq.gz')
-def simulation_uniform(infile, outfile):
+def simulation_uniform(infiles, outfile):
 
     alignment_summary_picklefile = infiles[0][0]
     infile = infiles[1]
@@ -566,6 +570,8 @@ def alignWithSHRiMP(infiles, outfile):
     tmp_file_fasta = P.get_temp_filename()
     tmp_file_sam = P.get_temp_filename()
 
+    threads = PARAMS['shrimp_threads']
+
     # Need to convert fastq to fasta for SHRiMP
     statement = '''
     zcat < %(infile)s |
@@ -577,6 +583,7 @@ def alignWithSHRiMP(infiles, outfile):
     gmapper
     %(tmp_file_fasta)s
     %(trna_sequences)s
+    -N %(threads)s
     --strata  --report 1000
     --sam-unaligned
     --mode mirna
@@ -633,8 +640,7 @@ def alignWithGSNAP(infiles, outfile):
 ###################################################
 
 @transform((alignWithBowtie2,
-            alignWithSHRiMP,
-            alignWithGSNAP),
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_individual',
            r'quant.dir/\1.\2.\3.gene_count_isodecoder',
@@ -651,8 +657,7 @@ def quantDiscreteCounts(infile, outfiles):
     submit=True)
 
 @transform((alignWithBowtie2,
-            alignWithSHRiMP,
-            alignWithGSNAP),
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_fractional_individual',
            r'quant.dir/\1.\2.\3.gene_count_fractional_isodecoder',
@@ -670,8 +675,7 @@ def quantFractionalCounts(infile, outfiles):
     submit=True)
 
 @transform((alignWithBowtie2,
-            alignWithSHRiMP,
-            alignWithGSNAP),
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_mapq10_individual',
            r'quant.dir/\1.\2.\3.gene_count_mapq10_isodecoder',
@@ -690,8 +694,7 @@ def quantDiscreteCountsMAPQ10(infile, outfiles):
 
 
 @transform((alignWithBowtie2,
-            alignWithSHRiMP,
-            alignWithGSNAP),
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(mergeNucMtSequences),
            r'quant.dir/\1.\2.\3/quant.sf')
@@ -883,8 +886,7 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
 @follows(compareTruthEstimateMimseq)
 @mkdir('truth2assignment.dir')
 @transform((alignWithBowtie2,
-            alignWithSHRiMP,
-            alignWithGSNAP),
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
                r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
@@ -947,9 +949,7 @@ def simulate():
     pass
 
 
-# @follows(summariseIndividualAlignments,
-#          summariseMergedAlignments)
-@follows(summariseMergedAlignments)
+@follows(summariseIndividualAlignments, summariseMergedAlignments)
 def summariseAlignments():
     'summarise the alignments with real reads'
     pass
