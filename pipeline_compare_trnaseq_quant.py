@@ -402,7 +402,7 @@ def summariseMergedAlignments(infiles, outfile):
     Use alignmentSummary.clustalwtrnaAlignmentSummary class to summarise the
     merged alignments and learn the mutational & truncation signatures
     '''
-    
+
     infile, trna_fasta = infiles
 
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True)
@@ -419,8 +419,7 @@ def summariseMergedAlignments(infiles, outfile):
            'simulations.dir/{input_file[0]}.0.simulation_uniform.fastq.gz')
 def simulation_uniform(infiles, outfile):
 
-    alignment_summary_picklefile = infiles[0][0]
-    infile = infiles[1]
+    alignment_summary_picklefile, infile = infiles
 
     n_reads = int(PARAMS['simulation_uniform_reads'])
 
