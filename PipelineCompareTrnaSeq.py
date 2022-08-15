@@ -45,9 +45,6 @@ def cat_mimseq_compare_files(infiles, outfile):
 @cluster_runnable
 def mergeCompareTruthEstimateMimseq(infiles_isodecoder, outfile_isodecoder,
                                     infiles_anticodon, outfile_anticodon):
-    outfile_isodecoder, outfile_anticodon = outfiles
-    infiles_isodecoder = [x[0] for x in infiles]
-    infiles_anticodon = [x[1] for x in infiles]
 
     cat_mimseq_compare_files(infiles_isodecoder, outfile_isodecoder)
     cat_mimseq_compare_files(infiles_anticodon, outfile_anticodon)
@@ -73,7 +70,7 @@ def simulate_reads(infile,
 
     if outfile_gt is not None:
         with open(outfile_gt, 'w') as out:
-            for k,v in updated_gt.items():
+            for k,v in ground_truth.items():
                 out.write('%s\t%s\n' % (k, v))
 
 @cluster_runnable
@@ -97,7 +94,11 @@ def summariseAlignments(infile, trna_fasta, outfile):
 
 
 @cluster_runnable
-def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfile_anticodon, min_mapq=0, discrete=True):
+def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfile_anticodon,
+                      random_single=False,
+                      allow_multimapping=True,
+                      min_mapq=0,
+                      discrete=True):
 
     inbam = pysam.Samfile(bam_infile, 'r')
 
@@ -105,16 +106,22 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
                    'isodecoder':Counter(),
                    'anticodon':Counter()}
 
-    for read_group in bam.iterate_reads(inbam):
+    for read_group in bam.iterate_reads(inbam, allow_multimapping):
 
-        assignments = set([read.reference_name for read in read_group if read.reference_name is not None and read.mapq>=min_mapq])
+        if min_mapq > 0:
+            # MAPQ 255 is unassigned
+            assignments = [read.reference_name for read in read_group if read.mapq>=min_mapq and read.mapq!=255]
+
+        assignments = [read.reference_name for read in read_group if read.reference_name is not None]
+
+        assignments = set(assignments)
 
         # No assignments for read after filtering
         if len(assignments) == 0:
             continue
 
-        # Just one assigned gene
-        if len(assignments) == 1:
+        # Just one assigned gene or just taking one random assignment
+        if len(assignments) == 1 or random_single:
             assignment = assignments.pop()
             read_counts['individual_sequence'][assignment] += 1
             read_counts['anticodon'][re.sub('\d$', '', '-'.join(assignment.split('-')[0:3]).replace('tRX', 'tRNA'))] +=1
@@ -133,10 +140,10 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
                     read_counts['isodecoder'][isodecoders.pop()] +=1
             else:
                 n_isodecoders = len(isodecoders)
-                fractional_assignment_isodecoders = 1/isodecoders
+                fractional_assignment_isodecoders = 1/n_isodecoders
 
                 for isodecoder in isodecoders:
-                    read_counts['isodecoder'][isodecoders] += fractional_assignment_isodecoders
+                    read_counts['isodecoder'][isodecoder] += fractional_assignment_isodecoders
 
                 n_anticodons = len(anticodons)
                 fractional_assignment_anticodons = 1/n_anticodons
@@ -357,13 +364,19 @@ def getTruth2Assignment(infile, isodecoder_mapping, outfile):
 
     # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
     trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
-    trna2isodecoder = {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])}
+    trna2isodecoder = defaultdict(str, {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])})
 
-    t2a_df['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df['truth']]
-    t2a_df['assignment_isodecoder'] = [trna2isodecoder[x] for x in t2a_df['assignment']]
+    with open(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), 'w') as outf:
+        for x,y in trna2isodecoder.items():
+            outf.write("%s\t%s\n" % (x, y))
 
-    t2a_df_mimseq_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
+    t2a_df_isodecoder['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['truth_isodecoder']]
+    t2a_df_isodecoder['assignment_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['assignment_isodecoder']]
+
+    t2a_df_mimseq_isodecoder = t2a_df_isodecoder.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
     t2a_df_mimseq_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
+
+
 
 @cluster_runnable
 def getTruth2AssignmentMimSeq(infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile):
@@ -403,8 +416,13 @@ def getTruth2AssignmentMimSeq(infile, mimseq_isodecoder_counts, isodecoder_mappi
     mimseq_isodecoder_table = pd.read_csv(mimseq_isodecoder_counts, sep='\t')
     parent2isodecoder = {p:i for i,p in zip(mimseq_isodecoder_table['isodecoder'], mimseq_isodecoder_table['parent'])}
 
+    # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
     trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
-    trna2isodecoder = {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])}
+    trna2isodecoder = defaultdict(str, {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])})
+
+    with open(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), 'w') as outf:
+        for x,y in trna2isodecoder.items():
+            outf.write("%s\t%s\n" % (x,y))
 
     t2a_df['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df['truth']]
     t2a_df['assignment_isodecoder'] = [parent2isodecoder[re.sub('-\d$', '', x)] for x in t2a_df['assignment']]

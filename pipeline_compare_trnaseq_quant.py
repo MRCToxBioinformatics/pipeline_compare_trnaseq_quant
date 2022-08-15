@@ -585,8 +585,6 @@ def alignWithSHRiMP(infiles, outfile):
 
     infile, trna_sequences = infiles
 
-    bowtie2_index = iotools.snip(bowtie2_index, '.1.bt2')
-
     tmp_file_fasta = P.get_temp_filename()
     tmp_file_sam = P.get_temp_filename()
 
@@ -617,7 +615,7 @@ def alignWithSHRiMP(infiles, outfile):
 
     P.run(statement)
 
-    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True)
+    CompareTrnaSeq.filter_sam(tmp_file_sam, outfile, submit=True)
     os.unlink(tmp_file_fasta)
     os.unlink(tmp_file_sam)
 
@@ -723,6 +721,51 @@ def quantDiscreteCountsMAPQ10(infile, outfiles):
     outfile_individual,
     outfile_isodecoder,
     outfile_anticodon,
+    min_mapq=10,
+    submit=True)
+
+
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           [r'quant.dir/\1.\2.\3.gene_count_no_multi_individual',
+           r'quant.dir/\1.\2.\3.gene_count_no_multi_isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_no_multi_anticodon'])
+def quantDiscreteCountsNoMultimapping(infile, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.tally_read_counts(
+    infile,
+    outfile_individual,
+    outfile_isodecoder,
+    outfile_anticodon,
+    allow_multimapping=False,
+    min_mapq=10,
+    submit=True)
+
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
+           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           [r'quant.dir/\1.\2.\3.gene_count_random_single_individual',
+           r'quant.dir/\1.\2.\3.gene_count_random_single_isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_random_single_anticodon'])
+def quantDiscreteCountsRandomSingle(infile, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.tally_read_counts(
+    infile,
+    outfile_individual,
+    outfile_isodecoder,
+    outfile_anticodon,
+    random_single=True,
     min_mapq=10,
     submit=True)
 
@@ -885,7 +928,8 @@ def compareTruthEstimateSalmon(infiles, outfiles):
         infiles, outfile_individual, outfile_isodecoder, outfile_anticodon, submit=True)
 
 
-@collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10),
+@collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10,
+          quantDiscreteCountsRandomSingle, quantDiscreteCountsNoMultimapping),
          regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).(gene_count.*)_.*'),
          add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
          [r'quant.dir/\2.\4_Decision.CompareTruthEstimate.tsv',
@@ -923,10 +967,10 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
 @mkdir('truth2assignment.dir')
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
-           regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
+           regex('quant.dir/(\S+?)_(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
-               r'truth2assignment.dir/\1.\2.\3.truth2assignment.tsv')
-def getTruth2Assignment(infile, outfile):
+               r'truth2assignment.dir/\1_\2.\3.\4.truth2assignment.tsv')
+def getTruth2Assignment(infiles, outfile):
     'Get the tally of ground truths to assignments'
 
     infile, isodecoder_mapping = infiles
@@ -941,12 +985,14 @@ def getTruth2Assignment(infile, outfile):
 @mkdir('truth2assignment.dir')
 @transform((simulation_uniform, simulation_with_truncations),
            regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
-           add_inputs(r'mimseq.dir/\1_\3/counts/Isodecoder_counts_raw.txt', r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
+           add_inputs(r'mimseq.dir/\1_\3/counts/Isodecoder_counts_raw.txt',
+                      r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping',
+                      r'mimseq.dir/\1_\3/align/\1_\2.\3.unpaired_uniq.bam'),
            r'truth2assignment.dir/\1_\2.\3.mimseq.truth2assignment.tsv')
 def getTruth2AssignmentMimSeq(infiles, outfile):
     'Get the tally of ground truths to assignments'
 
-    infile, mimseq_isodecoder_counts, isodecoder_mapping = infiles
+    infile_sim, mimseq_isodecoder_counts, isodecoder_mapping, infile = infiles
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
     job_condaenv=PARAMS['conda_base_env']
@@ -955,7 +1001,7 @@ def getTruth2AssignmentMimSeq(infiles, outfile):
         infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile, submit=True)
 
 
-@collate(getTruth2Assignment,
+@collate((getTruth2Assignment, getTruth2AssignmentMimSeq),
          regex('truth2assignment.dir/(\S+)\.(\d+)\.(simulation_\S+)\.(\S+)\.truth2assignment.tsv'),
          r'truth2assignment.dir/truth2assignment.\3.tsv')
 def mergeTruth2Assignment(infiles, outfile):
@@ -1006,12 +1052,12 @@ def quant():
     'Quantify from the simulated reads'
     pass
 
-@follows(getTruth2Assignment,
-         compareTruthEstimateSalmon,
+@follows(compareTruthEstimateSalmon,
          compareTruthEstimateDecisionCounts,
          compareTruthEstimateMimseq,
          mergeCompareTruthEstimateMimseq,
-         makeMimseqIsodecoderQuant)
+         makeMimseqIsodecoderQuant,
+         mergeTruth2Assignment)
 def compare():
     'compare observed and ground truth'
     pass
