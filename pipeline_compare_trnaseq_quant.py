@@ -288,7 +288,7 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     tmp_file_sam = P.get_temp_filename()
     tmp_file_single_sam = P.get_temp_filename()
 
-    threads = PARAMS['shrimp_threads']
+    job_threads = PARAMS['shrimp_threads']
 
     # Need to convert fastq to fasta for SHRiMP
     statement = '''
@@ -301,7 +301,7 @@ def mapWithSHRiMP2SingleReport(infiles, outfile):
     gmapper
     %(tmp_file_fasta)s
     %(trna_sequences)s
-    -N %(threads)s
+    -N %(job_threads)s
     --strata  --report 1000
     --sam-unaligned
     --mode mirna
@@ -588,7 +588,7 @@ def alignWithSHRiMP(infiles, outfile):
     tmp_file_fasta = P.get_temp_filename()
     tmp_file_sam = P.get_temp_filename()
 
-    threads = PARAMS['shrimp_threads']
+    job_threads = PARAMS['shrimp_threads']
 
     # Need to convert fastq to fasta for SHRiMP
     statement = '''
@@ -601,7 +601,7 @@ def alignWithSHRiMP(infiles, outfile):
     gmapper
     %(tmp_file_fasta)s
     %(trna_sequences)s
-    -N %(threads)s
+    -N %(job_threads)s
     --strata  --report 1000
     --sam-unaligned
     --mode mirna
@@ -806,7 +806,7 @@ def quantWithMimSeq(infiles, outfile):
     nuc_trnas = PARAMS['trna_sequences_infile']
     mt_trnas = PARAMS['trna_mt_sequences_infile']
     trna_scan = PARAMS['trna_scan_infile']
-    threads = PARAMS['mimseq_threads']
+    job_threads = PARAMS['mimseq_threads']
 
     tmp_outdir = P.get_temp_dir(clear=True)
     tmp_stdouterr = P.get_temp_filename()
@@ -832,7 +832,7 @@ def quantWithMimSeq(infiles, outfile):
     --mito-trnas %(mt_trnas)s
     --trnaout %(trna_scan)s
     --cluster-id 0.97
-    --threads %(threads)s
+    --threads %(job_threads)s
     --min-cov 0.0005
     --max-mismatches 0.075
     --control-condition condition1
