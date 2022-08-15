@@ -447,7 +447,7 @@ def mergeTruth2Assignment(infiles, outfile):
         dfs.append(df)
 
     df = pd.concat(dfs)
-    df.to_csv(outfile, sep='\t')
+    df.to_csv(outfile, sep='\t', index=False)
 
 @cluster_runnable
 def compareTruthEstimateSalmon(
@@ -510,6 +510,12 @@ def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isod
 
         if 'mapq10' in estimate_individual:
             quant_method += '_mapq10'
+
+        if 'random_single' in estimate_individual:
+            quant_method += '_random_single'
+
+        if 'no_multi' in estimate_individual:
+            quant_method += '_no_multi'
 
         truth_counts = pd.read_csv(truth, sep='\t', header=None,
                                    names=['Name', 'truth'])

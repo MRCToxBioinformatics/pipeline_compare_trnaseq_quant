@@ -744,7 +744,6 @@ def quantDiscreteCountsNoMultimapping(infile, outfiles):
     outfile_isodecoder,
     outfile_anticodon,
     allow_multimapping=False,
-    min_mapq=10,
     submit=True)
 
 @transform((alignWithBowtie2,
@@ -766,7 +765,6 @@ def quantDiscreteCountsRandomSingle(infile, outfiles):
     outfile_isodecoder,
     outfile_anticodon,
     random_single=True,
-    min_mapq=10,
     submit=True)
 
 
