@@ -34,4 +34,4 @@ mimseq:
   conda_env_name: 'mimseq'
 
 shrimp:
-  threads: 1    
+  threads: 1
