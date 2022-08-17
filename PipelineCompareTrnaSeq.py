@@ -108,11 +108,13 @@ def tally_read_counts(bam_infile, outfile_individual, outfile_isodecoder, outfil
 
     for read_group in bam.iterate_reads(inbam, allow_multimapping):
 
+        assignments = [read for read in read_group if read.reference_name is not None]
+
         if min_mapq > 0:
             # MAPQ 255 is unassigned
             assignments = [read.reference_name for read in read_group if read.mapq>=min_mapq and read.mapq!=255]
-
-        assignments = [read.reference_name for read in read_group if read.reference_name is not None]
+        else:
+            assignments = [read.reference_name for read in read_group]
 
         assignments = set(assignments)
 
@@ -178,6 +180,7 @@ def readMimSeqQuant(infile, drop_cols, melt_cols):
     mimseq_quant['simulation_n'] = [os.path.basename(x).split('.')[1] for x in mimseq_quant['filepath']]
 
     mimseq_quant['quant_method']='mimseq'
+    mimseq_quant['tally_method']='mimseq'
     return(mimseq_quant)
 
 @cluster_runnable
@@ -198,7 +201,7 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
     truth_counts = pd.concat(all_truth_counts)
 
     # Isodecoder-level comparison
-    mimseq_iso_quant = readMimSeqQuant(infile.replace('Anticodon','isodecoder'),
+    mimseq_iso_quant = readMimSeqQuant(infile.replace('Anticodon','Isodecoder'),
                                        drop_cols=['Single_isodecoder', 'parent', 'size'],
                                        melt_cols=['isodecoder'])
 
@@ -219,6 +222,7 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
                     key = isodecoder_prefix + '-' + isodecoder_ix
 
                 isodecoders2mimseqisodecoder[key] = isodecoder
+
         else:
             isodecoders2mimseqisodecoder[isodecoder] = isodecoder
 
@@ -232,18 +236,23 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
         if 'Und' in x:
             mimseq_isodecoder.append('Und')
             continue
-        x = re.sub('\d-([ATCGN]{3})', r'-\1', x.replace('_MT', '_mito_').replace('tRX', 'tRNA'))
+        x = re.sub('\d-([ATCGN]{3})', r'-\1', x.replace('_MT', '_mito_'))#.replace('tRX', 'tRNA'))
         if x in isodecoders2mimseqisodecoder:
             mimseq_isodecoder.append(isodecoders2mimseqisodecoder[x])
         else:
-            mimseq_isodecoder.append(isodecoders2mimseqisodecoder[x.replace('tRNA', 'tRX')])
+            try:
+                mimseq_isodecoder.append(isodecoders2mimseqisodecoder[x.replace('tRNA', 'tRX')])
+            except:
+                mimseq_isodecoder.append(x)
 
 
     truth_counts_isodecoder['mimseq_isodecoder'] = mimseq_isodecoder
 
+    truth_counts_isodecoder.to_csv(anticodon_out+'delete_me')
     truth_counts_isodecoder = truth_counts_isodecoder.groupby(
         ['mimseq_isodecoder', 'input_file', 'simulation_n']).agg(
             {'truth':'sum'}).reset_index()
+    truth_counts_isodecoder.to_csv(anticodon_out+'delete_me2')
 
     mimseq_vs_truth_iso = mimseq_iso_quant.merge(
         truth_counts_isodecoder,
@@ -276,40 +285,36 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
     # Anticodon-level comparison
     truth_counts_anticodon =  truth_counts.copy()
 
-    truth_counts_anticodon['Name'] = ['-'.join(x.split('-')[0:3]) for x in truth_counts_anticodon.Name]
+    truth_counts_anticodon['Name'] = ['-'.join(x.split('-')[0:3]) for x in truth_counts_anticodon['Name']]
 
-
-    # Mimseq internally replaces:
-    # _MT -> _mito_
-    # tRX -> tRNA
-    # Below we update anticodon name in truth so we can merge
-    truth_counts_anticodon['Name_mimseq'] = [
-        re.sub('\d-([ATCGN]{3})', r'-\1', x.replace('_MT', '_mito_')) if '_MT' in x else x for x in truth_counts_anticodon['Name']]
-
-    truth_counts_anticodon['Name_mimseq'] = [
-        x.replace('tRX', 'tRNA') for x in truth_counts_anticodon['Name_mimseq']]
+    truth_counts_anticodon['Name'] = [
+        re.sub('\d-([ATCGN]{3})', r'-\1', x.replace('tRX', 'tRNA')) for x in truth_counts_anticodon['Name']]
 
     truth_counts_anticodon = truth_counts_anticodon.groupby(
-        ['Name_mimseq', 'input_file', 'simulation_n']).agg(
+        ['Name', 'input_file', 'simulation_n']).agg(
             {'truth':'sum'}).reset_index()
 
     mimseq_ac_quant = readMimSeqQuant(infile,
                                       drop_cols=['size'],
                                       melt_cols=['Anticodon'])
+    # Mimseq internally replaces:
+    # _MT -> _mito_
+    # tRX -> tRNA
+    # Below we update anticodon name in mimseq output so we can merge
+    mimseq_ac_quant['Anticodon'] = [x.replace('_mito_', '_MT') for x in mimseq_ac_quant['Anticodon']]
 
-    mimseq_vs_truth_ac = mimseq_ac_quant.merge(truth_counts_anticodon,
-                                               left_on=['Anticodon', 'input_file', 'simulation_n'],
-                                               right_on=['Name_mimseq', 'input_file', 'simulation_n'])
+    mimseq_vs_truth_ac = truth_counts_anticodon.merge(mimseq_ac_quant,
+                                               right_on=['Anticodon', 'input_file', 'simulation_n'],
+                                               left_on=['Name', 'input_file', 'simulation_n'])
 
-    mimseq_vs_truth_ac = mimseq_vs_truth_ac.drop(
-        ['filepath'], axis=1).rename(
-            columns={'Anticodon':'Name'})
+
+    mimseq_vs_truth_ac = mimseq_vs_truth_ac.drop(['filepath', 'Anticodon'], axis=1)
 
     mimseq_vs_truth_ac.to_csv(anticodon_out, sep='\t', index=False)
 
 
 
-def mergeDecisionEstimateWithTruth(truth, estimate_infile, input_file, simulation_n, quant_method):
+def mergeDecisionEstimateWithTruth(truth, estimate_infile, input_file, simulation_n, quant_method, tally_method):
     estimate_counts = pd.read_csv(estimate_infile , sep='\t', header=None,
                                   names=['Name', 'NumReads'])
     counts_vs_truth = pd.merge(estimate_counts, truth, on='Name', how='right')
@@ -318,6 +323,7 @@ def mergeDecisionEstimateWithTruth(truth, estimate_infile, input_file, simulatio
     counts_vs_truth['input_file']=input_file
     counts_vs_truth['simulation_n']=simulation_n
     counts_vs_truth['quant_method']=quant_method
+    counts_vs_truth['tally_method']=tally_method
     return(counts_vs_truth)
 
 
@@ -439,10 +445,16 @@ def mergeTruth2Assignment(infiles, outfile):
         simulation_n = os.path.basename(infile).split('.')[1]
         quant_method = os.path.basename(infile).split('.')[3]
 
+        if quant_method == 'mimseq':
+            tally_method == 'mimseq'
+        else:
+            tally_method = os.path.basename(infile).split('.')[4].replace('gene_count_', '')
+
         df = pd.read_csv(infile, sep='\t')
         df['input_file']=input_file
         df['simulation_n']=simulation_n
         df['quant_method']=quant_method
+        df['tally_method']=tally_method
 
         dfs.append(df)
 
@@ -472,8 +484,10 @@ def compareTruthEstimateSalmon(
         simulation_n = os.path.basename(truth).split('.')[1]
         counts_vs_truth['simulation_n']=simulation_n
 
-        quant_method = os.path.dirname(estimate).split('.')[-1] + '_salmon'
+        quant_method = os.path.dirname(estimate).split('.')[-1]
         counts_vs_truth['quant_method']=quant_method
+
+        counts_vs_truth['tally_method']='salmon'
 
         all_counts_vs_truth.append(counts_vs_truth)
 
@@ -482,13 +496,13 @@ def compareTruthEstimateSalmon(
 
     all_counts_vs_truth['Name'] = ['-'.join(x.split('-')[0:4]) for x in all_counts_vs_truth.Name]
     all_counts_vs_truth_isodecoder = all_counts_vs_truth.groupby(
-        ['Name', 'simulation_n', 'quant_method', 'input_file']).agg(
+        ['Name', 'simulation_n', 'quant_method', 'tally_method', 'input_file']).agg(
             {'NumReads':'sum', 'truth':'sum'}).reset_index()
     all_counts_vs_truth_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
 
     all_counts_vs_truth['Name'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in all_counts_vs_truth.Name]
     all_counts_vs_truth_ac = all_counts_vs_truth.groupby(
-        ['Name', 'simulation_n', 'quant_method', 'input_file']).agg(
+        ['Name', 'simulation_n', 'quant_method', 'tally_method', 'input_file']).agg(
             {'NumReads':'sum', 'truth':'sum'}).reset_index()
 
     all_counts_vs_truth_ac.to_csv(outfile_anticodon, sep='\t', index=False)
@@ -506,22 +520,14 @@ def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isod
 
         input_file = os.path.basename(truth).split('.')[0]
         simulation_n = os.path.basename(truth).split('.')[1]
-        quant_method = os.path.basename(estimate_individual).split('.')[-2] + '_decision'
-
-        if 'mapq10' in estimate_individual:
-            quant_method += '_mapq10'
-
-        if 'random_single' in estimate_individual:
-            quant_method += '_random_single'
-
-        if 'no_multi' in estimate_individual:
-            quant_method += '_no_multi'
+        quant_method = os.path.basename(estimate_individual).split('.')[-3]
+        tally_method = (os.path.basename(estimate_individual).split('.')[-2]).replace('gene_count_', '')
 
         truth_counts = pd.read_csv(truth, sep='\t', header=None,
                                    names=['Name', 'truth'])
 
         counts_vs_truth = mergeDecisionEstimateWithTruth(
-            truth_counts, estimate_individual, input_file, simulation_n, quant_method)
+            truth_counts, estimate_individual, input_file, simulation_n, quant_method, tally_method)
 
         all_counts_vs_truth['individual'].append(counts_vs_truth)
 
@@ -530,7 +536,7 @@ def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isod
             ['Name']).agg(
                 {'truth':'sum'}).reset_index()
         counts_vs_truth_isodecoder = mergeDecisionEstimateWithTruth(
-            truth_counts_isodecoder, estimate_isodecoder, input_file, simulation_n, quant_method)
+            truth_counts_isodecoder, estimate_isodecoder, input_file, simulation_n, quant_method, tally_method)
         all_counts_vs_truth['isodecoder'].append(counts_vs_truth_isodecoder)
 
         truth_counts['Name'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in truth_counts.Name]
@@ -538,7 +544,7 @@ def compareTruthEstimateDecisionCounts(infiles, outfile_individual, outfile_isod
             ['Name']).agg(
                 {'truth':'sum'}).reset_index()
         counts_vs_truth_anticodon = mergeDecisionEstimateWithTruth(
-            truth_counts_anticodon, estimate_anticodon, input_file, simulation_n, quant_method)
+            truth_counts_anticodon, estimate_anticodon, input_file, simulation_n, quant_method, tally_method)
         all_counts_vs_truth['anticodon'].append(counts_vs_truth_anticodon)
 
 
@@ -558,6 +564,7 @@ def makeMimseqIsodecoderQuant(infile, mapping_file, outfile):
     isodecoder_mapping = pd.read_csv(mapping_file, sep='\t')
 
     isodecoder_quant = pd.read_csv(infile, sep='\t')
+    isodecoder_quant.to_csv(outfile, sep='\t', index=False)
 
     isodecoder_quant['trna_method'] = [x.split('_')[0] for x in isodecoder_quant['input_file']]
 
@@ -565,8 +572,9 @@ def makeMimseqIsodecoderQuant(infile, mapping_file, outfile):
                                               left_on=['Name', 'trna_method'],
                                                   right_on=['isodecoder', 'trna_method'])
 
+
     mimseq_isodecoder_quant = isodecoder_quant.groupby(
-            ['mimseq_isodecoder', 'input_file', 'simulation_n', 'quant_method']).agg(
+            ['mimseq_isodecoder', 'input_file', 'simulation_n', 'quant_method', 'tally_method']).agg(
                 {'NumReads':'sum', 'truth':'sum'}).reset_index().rename(
                     columns={'mimseq_isodecoder':'Name'})
 

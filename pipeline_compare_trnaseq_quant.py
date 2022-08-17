@@ -665,9 +665,9 @@ def alignWithGSNAP(infiles, outfile):
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           [r'quant.dir/\1.\2.\3.gene_count_individual',
-           r'quant.dir/\1.\2.\3.gene_count_isodecoder',
-           r'quant.dir/\1.\2.\3.gene_count_anticodon'])
+           [r'quant.dir/\1.\2.\3.gene_count_decision.individual',
+           r'quant.dir/\1.\2.\3.gene_count_decision.isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_decision.anticodon'])
 def quantDiscreteCounts(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -685,9 +685,9 @@ def quantDiscreteCounts(infile, outfiles):
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           [r'quant.dir/\1.\2.\3.gene_count_fractional_individual',
-           r'quant.dir/\1.\2.\3.gene_count_fractional_isodecoder',
-           r'quant.dir/\1.\2.\3.gene_count_fractional_anticodon'])
+           [r'quant.dir/\1.\2.\3.gene_count_fractional.individual',
+           r'quant.dir/\1.\2.\3.gene_count_fractional.isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_fractional.anticodon'])
 def quantFractionalCounts(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -706,9 +706,9 @@ def quantFractionalCounts(infile, outfiles):
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           [r'quant.dir/\1.\2.\3.gene_count_mapq10_individual',
-           r'quant.dir/\1.\2.\3.gene_count_mapq10_isodecoder',
-           r'quant.dir/\1.\2.\3.gene_count_mapq10_anticodon'])
+           [r'quant.dir/\1.\2.\3.gene_count_mapq10.individual',
+           r'quant.dir/\1.\2.\3.gene_count_mapq10.isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_mapq10.anticodon'])
 def quantDiscreteCountsMAPQ10(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -728,9 +728,9 @@ def quantDiscreteCountsMAPQ10(infile, outfiles):
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           [r'quant.dir/\1.\2.\3.gene_count_no_multi_individual',
-           r'quant.dir/\1.\2.\3.gene_count_no_multi_isodecoder',
-           r'quant.dir/\1.\2.\3.gene_count_no_multi_anticodon'])
+           [r'quant.dir/\1.\2.\3.gene_count_no_multi.individual',
+           r'quant.dir/\1.\2.\3.gene_count_no_multi.isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_no_multi.anticodon'])
 def quantDiscreteCountsNoMultimapping(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -749,9 +749,9 @@ def quantDiscreteCountsNoMultimapping(infile, outfiles):
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
-           [r'quant.dir/\1.\2.\3.gene_count_random_single_individual',
-           r'quant.dir/\1.\2.\3.gene_count_random_single_isodecoder',
-           r'quant.dir/\1.\2.\3.gene_count_random_single_anticodon'])
+           [r'quant.dir/\1.\2.\3.gene_count_random_single.individual',
+           r'quant.dir/\1.\2.\3.gene_count_random_single.isodecoder',
+           r'quant.dir/\1.\2.\3.gene_count_random_single.anticodon'])
 def quantDiscreteCountsRandomSingle(infile, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -861,12 +861,12 @@ def quantWithMimSeq(infiles, outfile):
 ###################################################
 @transform(quantWithMimSeq,
            regex('mimseq.dir/(\S+?)_(simulation_\S+)/counts/Anticodon_counts_raw.txt'),
-           add_inputs(r'simulations.dir/\1*.simulation_withtrunc.fastq.gz.gt'),
+           add_inputs(r'simulations.dir/\1*.\2.fastq.gz.gt'),
            [r'mimseq.dir/\1.\2.MimseqCompareTruthEstimateMimseqIsodecoder.tsv',
             r'mimseq.dir/\1.\2.MimseqCompareTruthEstimateAnticodon.tsv'])
 def compareTruthEstimateMimseq(infiles, outfiles):
     '''mimseq reports isodecoder-level quantification with some isodecoders still merged together,
-    hence isodecoder file is suffixed with MimSeqIsodecoder.tsv to distinguish if from
+    hence isodecoder file is suffixed with MimSeqIsodecoder.tsv to distinguish it from
     the other Isodecoder.tsv outputs
     '''
 
@@ -898,8 +898,9 @@ def mergeCompareTruthEstimateMimseq(infiles, outfiles):
         infiles_isodecoder, outfile_isodecoder, infiles_anticodon, outfile_anticodon, submit=True)
 
 
-@merge(compareTruthEstimateMimseq,
-       'quant.dir/mimseq_isodecoder_maps.tsv')
+@collate(compareTruthEstimateMimseq,
+         regex('mimseq.dir/(\S+?).(simulation_\S+).MimseqCompareTruthEstimateMimseqIsodecoder.tsv'),
+         r'quant.dir/\2_mimseq_isodecoder_maps.tsv')
 def mergeMimSeqIsodecoderMaps(infiles, outfile):
 
     infiles = [x[0] for x in infiles]
@@ -928,7 +929,7 @@ def compareTruthEstimateSalmon(infiles, outfiles):
 
 @collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10,
           quantDiscreteCountsRandomSingle, quantDiscreteCountsNoMultimapping),
-         regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).(gene_count.*)_.*'),
+         regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).(gene_count_.*).*'),
          add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
          [r'quant.dir/\2.\4_Decision.CompareTruthEstimate.tsv',
           r'quant.dir/\2.\4_Decision.CompareTruthEstimateIsodecoder.tsv',
@@ -944,10 +945,11 @@ def compareTruthEstimateDecisionCounts(infiles, outfiles):
         infiles, outfile_individual, outfile_isodecoder, outfile_anticodon, submit=True)
 
 
+@follows(mergeMimSeqIsodecoderMaps)
 @transform((compareTruthEstimateDecisionCounts, compareTruthEstimateSalmon),
-           regex('quant.dir/(\S+).CompareTruthEstimate.tsv'),
-           add_inputs(mergeMimSeqIsodecoderMaps),
-           r'quant.dir/\1.CompareTruthEstimateMimseqIsodecoder.tsv')
+           regex('quant.dir/(simulation_\S+)\.(Salmon|gene_count_\S+).CompareTruthEstimate.tsv'),
+           add_inputs(r'quant.dir/\1_mimseq_isodecoder_maps.tsv'),
+           r'quant.dir/\1.\2.CompareTruthEstimateMimseqIsodecoder.tsv')
 def makeMimseqIsodecoderQuant(infiles, outfile):
     infile = infiles[0][1]
     mapping_file = infiles[1]
