@@ -88,11 +88,23 @@ SEQUENCEFILES_REGEX = regex(r"(.*\/)*(\S+).(fastq.1.gz|fastq.gz|fastq)")
 ###################################################
 
 @mkdir('trna_sequences.dir')
-@originate('trna_sequences.dir/mt_sequences.fa')
-def updateMtFastaNaming(outfile):
-    CompareTrnaSeq.updateMtFastaNaming(PARAMS['trna_mt_sequences_infile'], outfile)
+@originate('trna_sequences.dir/nuc_sequences.fa')
+def filterNucFasta(outfile):
+    CompareTrnaSeq.filterFasta(PARAMS['trna_sequences_infile'], outfile)
 
-@merge((PARAMS['trna_sequences_infile'], updateMtFastaNaming),
+@mkdir('trna_sequences.dir')
+@originate('trna_sequences.dir/mt_sequences.fa')
+def filterMtFasta(outfile):
+    CompareTrnaSeq.filterFasta(PARAMS['trna_mt_sequences_infile'], outfile)
+
+@mkdir('trna_sequences.dir')
+@transform(filterMtFasta,
+           suffix('.fa'),
+           '.filtered.fa')
+def updateMtFastaNaming(infile, outfile):
+    CompareTrnaSeq.updateMtFastaNaming(infile, outfile)
+
+@merge((filterNucFasta, updateMtFastaNaming),
        'trna_sequences.dir/trna_sequences_all.fa')
 def mergeNucMtSequences(infiles, outfile):
 
@@ -803,8 +815,8 @@ def quantWithSalmon(infiles, outfile):
          r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
 def quantWithMimSeq(infiles, outfile):
 
-    nuc_trnas = PARAMS['trna_sequences_infile']
-    mt_trnas = PARAMS['trna_mt_sequences_infile']
+    nuc_trnas = filterNucFasta
+    mt_trnas = filterMtFasta
     trna_scan = PARAMS['trna_scan_infile']
     job_threads = PARAMS['mimseq_threads']
 
@@ -881,11 +893,11 @@ def compareTruthEstimateMimseq(infiles, outfiles):
     CompareTrnaSeq.compareMimSeq(infile, truths, isodecoder_out, anticodon_out, submit=True)
 
 
-
+@mkdir('final_results.dir')
 @collate(compareTruthEstimateMimseq,
          regex('mimseq.dir/(\S+)\.(simulation_\S+)\.MimseqCompareTruthEstimateMimseqIsodecoder.tsv'),
-       [r'quant.dir/\2.Mimseq.CompareTruthEstimateMimseqIsodecoder.tsv',
-        r'quant.dir/\2.Mimseq.CompareTruthEstimateAnticodon.tsv'])
+       [r'final_results.dir/\2.Mimseq.CompareTruthEstimateMimseqIsodecoder.tsv',
+        r'final_results.dir/\2.Mimseq.CompareTruthEstimateAnticodon.tsv'])
 def mergeCompareTruthEstimateMimseq(infiles, outfiles):
     outfile_isodecoder, outfile_anticodon = outfiles
     infiles_isodecoder = [x[0] for x in infiles]
@@ -910,12 +922,13 @@ def mergeMimSeqIsodecoderMaps(infiles, outfile):
 
     CompareTrnaSeq.mergeMimSeqIsodecoderMaps(infiles, outfile, submit=True)
 
+@mkdir('final_results.dir')
 @collate(quantWithSalmon,
        regex(r'quant.dir/(\S+)\.(\S+).(simulation_\S+)\.(\S+)/quant.sf'),
        add_inputs(r'simulations.dir/\1.\2.\3.fastq.gz.gt'),
-       [r'quant.dir/\3.Salmon.CompareTruthEstimate.tsv',
-        r'quant.dir/\3.Salmon.CompareTruthEstimateIsodecoder.tsv',
-        r'quant.dir/\3.Salmon.CompareTruthEstimateAnticodon.tsv'])
+       [r'final_results.dir/\3.Salmon.CompareTruthEstimate.tsv',
+        r'final_results.dir/\3.Salmon.CompareTruthEstimateIsodecoder.tsv',
+        r'final_results.dir/\3.Salmon.CompareTruthEstimateAnticodon.tsv'])
 def compareTruthEstimateSalmon(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -926,14 +939,14 @@ def compareTruthEstimateSalmon(infiles, outfiles):
     CompareTrnaSeq.compareTruthEstimateSalmon(
         infiles, outfile_individual, outfile_isodecoder, outfile_anticodon, submit=True)
 
-
+@mkdir('final_results.dir')
 @collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10,
           quantDiscreteCountsRandomSingle, quantDiscreteCountsNoMultimapping),
          regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).(gene_count_.*).*'),
          add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
-         [r'quant.dir/\2.\4_Decision.CompareTruthEstimate.tsv',
-          r'quant.dir/\2.\4_Decision.CompareTruthEstimateIsodecoder.tsv',
-          r'quant.dir/\2.\4_Decision.CompareTruthEstimateAnticodon.tsv'])
+         [r'final_results.dir/\2.\4_Decision.CompareTruthEstimate.tsv',
+          r'final_results.dir/\2.\4_Decision.CompareTruthEstimateIsodecoder.tsv',
+          r'final_results.dir/\2.\4_Decision.CompareTruthEstimateAnticodon.tsv'])
 def compareTruthEstimateDecisionCounts(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
@@ -944,12 +957,12 @@ def compareTruthEstimateDecisionCounts(infiles, outfiles):
     CompareTrnaSeq.compareTruthEstimateDecisionCounts(
         infiles, outfile_individual, outfile_isodecoder, outfile_anticodon, submit=True)
 
-
+@mkdir('final_results.dir')
 @follows(mergeMimSeqIsodecoderMaps)
 @transform((compareTruthEstimateDecisionCounts, compareTruthEstimateSalmon),
-           regex('quant.dir/(simulation_\S+)\.(Salmon|gene_count_\S+).CompareTruthEstimate.tsv'),
+           regex('final_results.dir/(simulation_\S+)\.(Salmon|gene_count_\S+).CompareTruthEstimate.tsv'),
            add_inputs(r'quant.dir/\1_mimseq_isodecoder_maps.tsv'),
-           r'quant.dir/\1.\2.CompareTruthEstimateMimseqIsodecoder.tsv')
+           r'final_results.dir/\1.\2.CompareTruthEstimateMimseqIsodecoder.tsv')
 def makeMimseqIsodecoderQuant(infiles, outfile):
     infile = infiles[0][1]
     mapping_file = infiles[1]
@@ -1000,10 +1013,10 @@ def getTruth2AssignmentMimSeq(infiles, outfile):
     CompareTrnaSeq.getTruth2AssignmentMimSeq(
         infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile, submit=True)
 
-
+@mkdir('final_results.dir')
 @collate((getTruth2Assignment, getTruth2AssignmentMimSeq),
          regex('truth2assignment.dir/(\S+)\.(\d+)\.(simulation_\S+)\.(\S+)\.truth2assignment.tsv'),
-         r'truth2assignment.dir/truth2assignment.\3.tsv')
+         r'final_results.dir/truth2assignment.\3.tsv')
 def mergeTruth2Assignment(infiles, outfile):
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"

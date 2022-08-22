@@ -9,6 +9,13 @@ import re
 import os
 from Bio import SeqIO
 
+def filterFasta(infile, outfile):
+    with open(outfile, 'w') as outf:
+        for trna_record in SeqIO.parse(infile, "fasta"):
+            if len(trna_record.seq) < 100:
+                SeqIO.write(trna_record, outf, "fasta")
+
+
 def updateMtFastaNaming(infile, outfile):
     with open(outfile, 'w') as outf:
         for trna_record in SeqIO.parse(infile, "fasta"):
