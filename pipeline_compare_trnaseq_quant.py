@@ -440,13 +440,13 @@ def summariseMergedAlignments(infiles, outfile):
            SEQUENCEFILES_REGEX,
            r'simulations.dir/\2.0.simulation_null.fastq.gz')
 def simulation_null(infile, outfile):
-    '''create softlinks to real data in same filestructure format as simulations so 
+    '''create softlinks to real data in same filestructure format as simulations so
     they can be processed by the same quantification tasks
     '''
 
     os.symlink(os.path.abspath(infile), outfile)
-    
-    
+
+
 @mkdir('simulations.dir')
 @transform(summariseMergedAlignments,
            formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
@@ -899,6 +899,46 @@ def quantWithMimSeq(infiles, outfile):
 
     P.run(statement)
 
+
+#####################################################
+# concatenate quantification estiamtes from real data
+#####################################################
+
+@mkdir('final_results.dir')
+@collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10,
+          quantDiscreteCountsRandomSingle, quantDiscreteCountsNoMultimapping),
+         regex('quant.dir/(\S+).(simulation_null)\.(\S+).(gene_count_.*).*'),
+         [r'final_results.dir/\2.\4_Decision.ConcatenateEstimate.tsv',
+          r'final_results.dir/\2.\4_Decision.ConcatenateEstimateIsodecoder.tsv',
+          r'final_results.dir/\2.\4_Decision.ConcatenateEstimateAnticodon.tsv'])
+def concatenateEstimateDecisionCounts(infiles, outfiles):
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.concatenateEstimateDecisionCounts(
+        infiles,
+        outfiles,
+        submit=True,  job_options=job_options)
+
+
+@mkdir('final_results.dir')
+@collate(quantWithSalmon,
+       regex(r'quant.dir/(\S+)\.(\S+).(simulation_null)\.(\S+)/quant.sf'),
+       [r'final_results.dir/\3.Salmon.ConcatenateEstimate.tsv',
+        r'final_results.dir/\3.Salmon.ConcatenateEstimateIsodecoder.tsv',
+        r'final_results.dir/\3.Salmon.ConcatenateEstimateAnticodon.tsv'])
+def compareTruthEstimateSalmon(infiles, outfiles):
+
+    outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.concatenateEstimateSalmon(
+        infiles,
+        outfile_individual, outfile_isodecoder, outfile_anticodon,
+        submit=True, job_options=job_options)
 
 ###################################################
 # compare ground truth and quantification estimates
