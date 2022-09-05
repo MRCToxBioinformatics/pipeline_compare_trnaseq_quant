@@ -32,6 +32,14 @@ simulation:
 mimseq:
   threads: 7
   conda_env_name: 'mimseq'
+  # maximum number of simultaneous tasks. Use 1 if running locally to avoid excessive CPU usage!
+  max_sim_tasks: 100
 
 shrimp:
+  threads: 1
+
+bowtie2:
+  threads: 1
+
+bwa2:
   threads: 1
