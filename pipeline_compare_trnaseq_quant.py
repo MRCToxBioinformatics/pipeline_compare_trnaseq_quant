@@ -890,9 +890,11 @@ def quantWithMimSeq(infiles, outfile):
 
     outdir = os.path.dirname(os.path.dirname(outfile))
 
+
+    #--search vsearch
+
     statement = '''
     mimseq
-    --search vsearch
     --trnas %(nuc_trnas)s
     --mito-trnas %(mt_trnas)s
     --trnaout %(trna_scan)s
@@ -915,7 +917,7 @@ def quantWithMimSeq(infiles, outfile):
     mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
     ''' % locals()
 
-    job_options = PARAMS['cluster_options'] + " -t 6:00:00"
+    job_options = PARAMS['cluster_options'] + " -t 10:00:00"
     job_condaenv=PARAMS['mimseq_conda_env_name']
 
     P.run(statement)
@@ -1170,7 +1172,7 @@ def compare():
 
 
 @follows(concatenateEstimateDecisionCounts,
-         compareTruthEstimateSalmon)
+         concatenateEstimateSalmon)
 def quantifyReal():
     '''quantify from the real raw data. This task by itself will not include
     mimseq quantification'''
@@ -1184,7 +1186,6 @@ def quantifyReal():
 def full():
     'run it all'
     pass
-
 
 ###################################################
 # Making pipline command-line friendly
