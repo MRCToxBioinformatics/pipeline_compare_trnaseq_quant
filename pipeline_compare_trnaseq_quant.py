@@ -869,9 +869,11 @@ def quantWithMimSeq(infiles, outfile):
 
     outdir = os.path.dirname(os.path.dirname(outfile))
 
+    
+    #--search vsearch 
+
     statement = '''
     mimseq
-    --search vsearch
     --trnas %(nuc_trnas)s
     --mito-trnas %(mt_trnas)s
     --trnaout %(trna_scan)s
@@ -894,7 +896,7 @@ def quantWithMimSeq(infiles, outfile):
     mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
     ''' % locals()
 
-    job_options = PARAMS['cluster_options'] + " -t 6:00:00"
+    job_options = PARAMS['cluster_options'] + " -t 10:00:00"
     job_condaenv=PARAMS['mimseq_conda_env_name']
 
     P.run(statement)
@@ -928,7 +930,7 @@ def concatenateEstimateDecisionCounts(infiles, outfiles):
        [r'final_results.dir/\3.Salmon.ConcatenateEstimate.tsv',
         r'final_results.dir/\3.Salmon.ConcatenateEstimateIsodecoder.tsv',
         r'final_results.dir/\3.Salmon.ConcatenateEstimateAnticodon.tsv'])
-def compareTruthEstimateSalmon(infiles, outfiles):
+def concatenateTruthEstimateSalmon(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
@@ -1147,13 +1149,22 @@ def compare():
     'compare observed and ground truth'
     pass
 
-@follows(summariseAlignments,
+
+@follows(concatenateEstimateDecisionCounts,
+         concatenateTruthEstimateSalmon)
+def quantifyReal():
+    '''quantify from the real raw data. This task by itself will not include
+    mimseq quantification'''
+    pass
+
+
+@follows(quantifyReal,
+         summariseAlignments,
          quant,
          compare)
 def full():
-    'run it all!'
+    'run it all'
     pass
-
 
 ###################################################
 # Making pipline command-line friendly

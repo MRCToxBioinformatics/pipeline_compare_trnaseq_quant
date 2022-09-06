@@ -472,34 +472,34 @@ def mergeTruth2Assignment(infiles, outfile):
 @cluster_runnable
 def concatenateEstimateSalmon(infiles, outfile_individual, outfile_isodecoder, outfile_anticodon):
 
-    all_counts_df = []
+    all_counts = []
 
     for estimate in infiles:
 
         estimate_counts = pd.read_csv(estimate, sep='\t')[['Name', 'NumReads']]
 
-        input_file = os.path.basename(truth).split('.')[0]
+        input_file = os.path.basename(os.path.dirname(estimate)).split('.')[0]
         quant_method = os.path.dirname(estimate).split('.')[-1]
 
         estimate_counts['input_file']=input_file
         estimate_counts['quant_method']=quant_method
         estimate_counts['tally_method']='salmon'
 
-        all_counts.append(counts_vs_truth)
+        all_counts.append(estimate_counts)
 
     all_counts_df = pd.concat(all_counts)
     all_counts_df.to_csv(outfile_individual, sep='\t', index=False)
 
-    all_counts['Name'] = ['-'.join(x.split('-')[0:4]) for x in all_counts.Name]
-    all_counts_isodecoder = all_counts.groupby(
-        ['Name', 'simulation_n', 'quant_method', 'tally_method', 'input_file']).agg(
-            {'NumReads':'sum', 'truth':'sum'}).reset_index()
+    all_counts_df['Name'] = ['-'.join(x.split('-')[0:4]) for x in all_counts_df.Name]
+    all_counts_isodecoder = all_counts_df.groupby(
+        ['Name', 'quant_method', 'tally_method', 'input_file']).agg(
+            {'NumReads':'sum'}).reset_index()
     all_counts_isodecoder.to_csv(outfile_isodecoder, sep='\t', index=False)
 
-    all_counts['Name'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in all_counts.Name]
-    all_counts_ac = all_counts.groupby(
-        ['Name', 'simulation_n', 'quant_method', 'tally_method', 'input_file']).agg(
-            {'NumReads':'sum', 'truth':'sum'}).reset_index()
+    all_counts_df['Name'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in all_counts_df.Name]
+    all_counts_ac = all_counts_df.groupby(
+        ['Name', 'quant_method', 'tally_method', 'input_file']).agg(
+            {'NumReads':'sum'}).reset_index()
     all_counts_ac.to_csv(outfile_anticodon, sep='\t', index=False)
 
 
@@ -509,29 +509,28 @@ def concatenateEstimateDecisionCounts(infiles, outfiles):
 
     for infile in infiles:
 
-        input_file = os.path.basename(infile).split('.')[0]
-        quant_method = os.path.basename(infile).split('.')[-3]
-        tally_method = (os.path.basename(infile).split('.')[-2]).replace('gene_count_', '')
+        estimates = {'individual': infile[0],
+                     'isodecoder': infile[1],
+                     'anticodon': infile[2]}
 
-        estimate_individual, estimate_isodecoder, estimate_anticodon = infile
-        estimates = {'individual': estimate_individual,
-                     'isodecoder': estimate_isodecoder,
-                     'anticodon': estimate_anticodon}
+        input_file = os.path.basename(infile[0]).split('.')[0]
+        quant_method = os.path.basename(infile[0]).split('.')[-3]
+        tally_method = os.path.basename(infile[0]).split('.')[-2].replace('gene_count_', '')
 
         for estimate_level in estimates.keys():
 
             estimate_counts = pd.read_csv(estimates[estimate_level], sep='\t', header=None,
                                           names=['Name', 'NumReads'])
 
-            all_counts['input_file']=input_file
-            all_counts['quant_method']=quant_method
-            all_counts['tally_method']=tally_method
+            estimate_counts['input_file']=input_file
+            estimate_counts['quant_method']=quant_method
+            estimate_counts['tally_method']=tally_method
 
             all_counts[estimate_level].append(estimate_counts)
 
-    outfiles = {'individual': outfiles[1],
-                 'isodecoder': outfiles[2],
-                 'anticodon': outfiles[3]}
+    outfiles = {'individual': outfiles[0],
+                 'isodecoder': outfiles[1],
+                 'anticodon': outfiles[2]}
 
     # we can re-use the keys from the last dictionary of filepaths
     for estimate_level in estimates.keys():
