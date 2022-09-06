@@ -430,11 +430,25 @@ def summariseMergedAlignments(infiles, outfile):
 
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True, job_options=job_options)
 
+@collate(summariseMergedAlignments,
+         regex('mut_trunc_sig.dir/(\S+?)_.*.merged.summariseAlignments.pickle'),
+         r'mut_trunc_sig.dir/\1_common_genes.tsv')
+def defineCommonGenesPerMethod(infiles, outfile):
+    mut_dict = pickle.load(open(infiles[0], 'rb'))
+    common_genes = set(mut_dict.alignment_coordinates.keys())
 
+    for infile in infiles[1:]:
+        mut_dict = pickle.load(open(infile, 'rb'))
+        common_genes = common_genes.intersection(set(mut_dict.alignment_coordinates.keys()))
+
+    with open(outfile, 'w') as outf:
+        for gene in common_genes:
+            outf.write('%s\n' % gene)
 ###################################################
 # simulate reads
 ###################################################
 
+@follows(defineCommonGenesPerMethod)
 @mkdir('simulations.dir')
 @transform(SEQUENCEFILES,
            SEQUENCEFILES_REGEX,
@@ -447,18 +461,25 @@ def simulation_null(infile, outfile):
     os.symlink(os.path.abspath(infile), outfile)
 
 
+@follows(defineCommonGenesPerMethod)
 @mkdir('simulations.dir')
 @transform(summariseMergedAlignments,
-           formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
-           add_inputs(mergeNucMtSequences),
+           regex('mut_trunc_sig.dir/(\S+?)_(\S+).merged.summariseAlignments.pickle'),
+           add_inputs(mergeNucMtSequences, r'mut_trunc_sig.dir/\1_common_genes.tsv'),
            'simulations.dir/{input_file[0]}.0.simulation_uniform.fastq.gz')
 def simulation_uniform(infiles, outfile):
 
-    alignment_summary_picklefile, infile = infiles
+    alignment_summary_picklefile, infile, common_genes_inf = infiles
 
+
+    common_genes = set()
+    with open(common_genes_inf, 'r') as inf:
+        for line in inf:
+            common_genes.add(line.strip,)
+    raise ValueError
     n_reads = int(PARAMS['simulation_uniform_reads'])
 
-    gt = simulateReads.make_gt(infile, n_reads, 1, 0, filter='\-Und\-')
+    gt = simulateReads.make_gt(infile, n_reads, 1, 0, genes=common_genes, filter='\-Und\-')
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
@@ -928,7 +949,7 @@ def concatenateEstimateDecisionCounts(infiles, outfiles):
        [r'final_results.dir/\3.Salmon.ConcatenateEstimate.tsv',
         r'final_results.dir/\3.Salmon.ConcatenateEstimateIsodecoder.tsv',
         r'final_results.dir/\3.Salmon.ConcatenateEstimateAnticodon.tsv'])
-def compareTruthEstimateSalmon(infiles, outfiles):
+def concatenateEstimateSalmon(infiles, outfiles):
 
     outfile_individual, outfile_isodecoder, outfile_anticodon = outfiles
 
@@ -1147,11 +1168,21 @@ def compare():
     'compare observed and ground truth'
     pass
 
-@follows(summariseAlignments,
+
+@follows(concatenateEstimateDecisionCounts,
+         compareTruthEstimateSalmon)
+def quantifyReal():
+    '''quantify from the real raw data. This task by itself will not include
+    mimseq quantification'''
+    pass
+
+
+@follows(quantifyReal,
+         summariseAlignments,
          quant,
          compare)
 def full():
-    'run it all!'
+    'run it all'
     pass
 
 
