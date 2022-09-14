@@ -255,11 +255,9 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
 
     truth_counts_isodecoder['mimseq_isodecoder'] = mimseq_isodecoder
 
-    truth_counts_isodecoder.to_csv(anticodon_out+'delete_me')
     truth_counts_isodecoder = truth_counts_isodecoder.groupby(
         ['mimseq_isodecoder', 'input_file', 'simulation_n']).agg(
             {'truth':'sum'}).reset_index()
-    truth_counts_isodecoder.to_csv(anticodon_out+'delete_me2')
 
     mimseq_vs_truth_iso = mimseq_iso_quant.merge(
         truth_counts_isodecoder,
@@ -278,14 +276,14 @@ def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
         truth_counts_isodecoders = set(['-'.join(x.split('-')[0:4]) for x in truth_counts.Name])
         for k, v in isodecoders2mimseqisodecoder.items():
             if k not in truth_counts_isodecoders:
-                k = k.replace('tRX', 'tRNA').replace('_mito_', '_MT')
+                k = k.replace('tRX', 'tRNA').replace('-tRNA', '-').replace('_mito_', '_MT')
                 if k not in truth_counts_isodecoders:
                     r = re.compile(re.sub('-([ATCGN]{3})', r'\\d-\1', k))
                     matches = list(filter(r.match, truth_counts_isodecoders))
                     if len(matches)==1:
                         k = matches[0]
                     else:
-                        raise ValueError('More than one possible mimseq isodecoder to input sequence name!')
+                        raise ValueError('Not just one possible mimseq isodecoder to input sequence name! %s : %s' %(k, ','.join(matches)))
 
             outf.write('%s\t%s\n' % (k,v))
 

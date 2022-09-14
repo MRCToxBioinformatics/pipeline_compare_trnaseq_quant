@@ -466,7 +466,7 @@ def simulation_null(infile, outfile):
 @transform(summariseMergedAlignments,
            regex('mut_trunc_sig.dir/(\S+?)_(\S+).merged.summariseAlignments.pickle'),
            add_inputs(mergeNucMtSequences, r'mut_trunc_sig.dir/\1_common_genes.tsv'),
-           'simulations.dir/{input_file[0]}.0.simulation_uniform.fastq.gz')
+           r'simulations.dir/\1_\2.0.simulation_uniform.fastq.gz')
 def simulation_uniform(infiles, outfile):
 
     alignment_summary_picklefile, infile, common_genes_inf = infiles
@@ -475,11 +475,11 @@ def simulation_uniform(infiles, outfile):
     common_genes = set()
     with open(common_genes_inf, 'r') as inf:
         for line in inf:
-            common_genes.add(line.strip,)
-    raise ValueError
+            common_genes.add(line.strip(),)
+
     n_reads = int(PARAMS['simulation_uniform_reads'])
 
-    gt = simulateReads.make_gt(infile, n_reads, 1, 0, genes=common_genes, filter='\-Und\-')
+    gt = simulateReads.make_gt(infile, n_reads, 1, 0, filter='\-Und\-', genes=common_genes)
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
@@ -507,21 +507,30 @@ def create_files(output_file):
     with open(output_file, "w"):
         pass
 
+
+@follows(defineCommonGenesPerMethod)
 @mkdir('simulations.dir')
 @product(summariseMergedAlignments,
-         formatter('mut_trunc_sig.dir/(?P<input_file>\S+).merged.summariseAlignments.pickle'),
+         formatter('mut_trunc_sig.dir/(?P<trna_seq_method>\S+?)_(?P<sample>\S+).merged.summariseAlignments.pickle'),
          create_files,
          formatter('simulation_dummy_files/(?P<simulation_n>\d+)'),
-         add_inputs(mergeNucMtSequences),
-         'simulations.dir/{input_file[0][0]}.{simulation_n[1][0]}.simulation_withtrunc.fastq.gz')
-def simulation_with_truncations(infiles, outfile):
+         add_inputs(mergeNucMtSequences, 'mut_trunc_sig.dir/{trna_seq_method[0][0]}_common_genes.tsv'),
+         'simulations.dir/{trna_seq_method[0][0]}_{sample[0][0]}.{simulation_n[1][0]}.simulation_realistic.fastq.gz')
+def simulation_realistic(infiles, outfile):
 
     alignment_summary_picklefile = infiles[0][0]
-    infile = infiles[1]
+    common_genes_inf = infiles[2]
+
+    common_genes = set()
+    with open(common_genes_inf, 'r') as inf:
+        for line in inf:
+            common_genes.add(line.strip(),)
 
     n_reads = int(PARAMS['simulation_withmut_reads'])
 
-    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-')
+    infile = infiles[1]
+
+    gt = simulateReads.make_gt(infile, n_reads, 10, 5, filter='\-Und\-', genes=common_genes)
 
     alignment_summary=pickle.load(open(alignment_summary_picklefile, 'rb'))
 
@@ -551,7 +560,7 @@ def simulation_with_truncations(infiles, outfile):
 @mkdir('quant.dir')
 @transform((simulation_null,
             simulation_uniform,
-            simulation_with_truncations),
+            simulation_realistic),
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBWAIndex),
            r'quant.dir/\1.\2.bwa.bam')
@@ -591,7 +600,7 @@ def alignWithBWA(infiles, outfile):
 @mkdir('quant.dir')
 @transform((simulation_null,
             simulation_uniform,
-            simulation_with_truncations),
+            simulation_realistic),
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildBowtie2Index),
            r'quant.dir/\1.\2.bowtie2.bam')
@@ -634,7 +643,7 @@ def alignWithBowtie2(infiles, outfile):
 @mkdir('quant.dir')
 @transform((simulation_null,
             simulation_uniform,
-            simulation_with_truncations),
+            simulation_realistic),
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(mergeNucMtSequences),
            r'quant.dir/\1.\2.shrimp.bam')
@@ -680,7 +689,7 @@ def alignWithSHRiMP(infiles, outfile):
 @mkdir('quant.dir')
 @transform((simulation_null,
             simulation_uniform,
-            simulation_with_truncations),
+            simulation_realistic),
            regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
            add_inputs(buildGSNAPIndex),
            r'quant.dir/\1.\2.gsnap.bam')
@@ -763,8 +772,9 @@ def quantFractionalCounts(infile, outfiles):
         submit=True,
      job_options=job_options)
 
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+
+# not shrimp as it doesn't report MAPQ as parameterised here
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_mapq10.individual',
            r'quant.dir/\1.\2.\3.gene_count_mapq10.isodecoder',
@@ -861,8 +871,8 @@ def quantWithSalmon(infiles, outfile):
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon! (only needed for non-HPC runs)
 @jobs_limit(PARAMS['mimseq_max_sim_tasks'])
 @mkdir('mimseq.dir')
-@collate((simulation_null, simulation_uniform, simulation_with_truncations),
-         regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
+@collate((simulation_null, simulation_uniform, simulation_realistic),
+         regex('simulations.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic).fastq.gz'),
          add_inputs(filterNucFasta, filterMtFasta),
          r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
 def quantWithMimSeq(infiles, outfile):
@@ -895,7 +905,7 @@ def quantWithMimSeq(infiles, outfile):
 
     statement = '''
     mimseq
-    --trnas %(nuc_trnas)s
+    -t %(nuc_trnas)s
     --mito-trnas %(mt_trnas)s
     --trnaout %(trna_scan)s
     --cluster-id 0.97
@@ -917,7 +927,7 @@ def quantWithMimSeq(infiles, outfile):
     mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
     ''' % locals()
 
-    job_options = PARAMS['cluster_options'] + " -t 10:00:00"
+    job_options = PARAMS['cluster_options'] + " -t 15:00:00"
     job_condaenv=PARAMS['mimseq_conda_env_name']
 
     P.run(statement)
@@ -967,7 +977,7 @@ def concatenateEstimateSalmon(infiles, outfiles):
 # compare ground truth and quantification estimates
 ###################################################
 @transform(quantWithMimSeq,
-           regex('mimseq.dir/(\S+?)_(simulation_uniform|simulation_withtrunc)/counts/Anticodon_counts_raw.txt'),
+           regex('mimseq.dir/(\S+?)_(simulation_uniform|simulation_realistic)/counts/Anticodon_counts_raw.txt'),
            add_inputs(r'simulations.dir/\1*.\2.fastq.gz.gt'),
            [r'mimseq.dir/\1.\2.MimseqCompareTruthEstimateMimseqIsodecoder.tsv',
             r'mimseq.dir/\1.\2.MimseqCompareTruthEstimateAnticodon.tsv'])
@@ -1019,7 +1029,7 @@ def mergeMimSeqIsodecoderMaps(infiles, outfile):
 
 @mkdir('final_results.dir')
 @collate(quantWithSalmon,
-       regex(r'quant.dir/(\S+)\.(\S+).(simulation_uniform|simulation_withtrunc)\.(\S+)/quant.sf'),
+       regex(r'quant.dir/(\S+)\.(\S+).(simulation_uniform|simulation_realistic)\.(\S+)/quant.sf'),
        add_inputs(r'simulations.dir/\1.\2.\3.fastq.gz.gt'),
        [r'final_results.dir/\3.Salmon.CompareTruthEstimate.tsv',
         r'final_results.dir/\3.Salmon.CompareTruthEstimateIsodecoder.tsv',
@@ -1037,7 +1047,7 @@ def compareTruthEstimateSalmon(infiles, outfiles):
 @mkdir('final_results.dir')
 @collate((quantFractionalCounts, quantDiscreteCounts, quantDiscreteCountsMAPQ10,
           quantDiscreteCountsRandomSingle, quantDiscreteCountsNoMultimapping),
-         regex('quant.dir/(\S+).(simulation_uniform|simulation_withtrunc)\.(\S+).(gene_count_.*).*'),
+         regex('quant.dir/(\S+).(simulation_uniform|simulation_realistic)\.(\S+).(gene_count_.*).*'),
          add_inputs(r'simulations.dir/\1.\2.fastq.gz.gt'),
          [r'final_results.dir/\2.\4_Decision.CompareTruthEstimate.tsv',
           r'final_results.dir/\2.\4_Decision.CompareTruthEstimateIsodecoder.tsv',
@@ -1075,7 +1085,7 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
 @mkdir('truth2assignment.dir')
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
-           regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_withtrunc)\.(\S+).bam'),
+           regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
            add_inputs(r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
                r'truth2assignment.dir/\1_\2.\3.\4.truth2assignment.tsv')
 def getTruth2Assignment(infiles, outfile):
@@ -1091,8 +1101,8 @@ def getTruth2Assignment(infiles, outfile):
 
 @follows(compareTruthEstimateMimseq)
 @mkdir('truth2assignment.dir')
-@transform((simulation_uniform, simulation_with_truncations),
-           regex('simulations.dir/(\S+?)_(\S+).(simulation_uniform|simulation_withtrunc).fastq.gz'),
+@transform((simulation_uniform, simulation_realistic),
+           regex('simulations.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic).fastq.gz'),
            add_inputs(r'mimseq.dir/\1_\3/counts/Isodecoder_counts_raw.txt',
                       r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping',
                       r'mimseq.dir/\1_\3/align/\1_\2.\3.unpaired_uniq.bam'),
@@ -1143,7 +1153,7 @@ def mergeTruth2Assignment(infiles, outfile):
 
 
 @follows(simulation_uniform,
-         simulation_with_truncations)
+         simulation_realistic)
 def simulate():
     'simulate tRNA reads from basic to more realistic'
     pass
