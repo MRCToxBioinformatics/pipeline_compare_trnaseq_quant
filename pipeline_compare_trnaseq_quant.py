@@ -42,9 +42,9 @@ from ruffus import *
 # import useful standard python modules
 import sys
 import os
+import shutil
 import re
 import pickle
-import shutil
 import glob
 
 import pandas as pd
@@ -458,8 +458,7 @@ def simulation_null(infile, outfile):
     they can be processed by the same quantification tasks
     '''
 
-    os.symlink(os.path.abspath(infile), outfile)
-
+    shutil.copyfile(os.path.abspath(infile), outfile)
 
 @follows(defineCommonGenesPerMethod)
 @mkdir('simulations.dir')
@@ -871,8 +870,8 @@ def quantWithSalmon(infiles, outfile):
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon! (only needed for non-HPC runs)
 @jobs_limit(PARAMS['mimseq_max_sim_tasks'])
 @mkdir('mimseq.dir')
-@collate((simulation_null, simulation_uniform, simulation_realistic),
-         regex('simulations.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic).fastq.gz'),
+@collate((simulation_uniform, simulation_realistic),
+         regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
          add_inputs(filterNucFasta, filterMtFasta),
          r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
 def quantWithMimSeq(infiles, outfile):
