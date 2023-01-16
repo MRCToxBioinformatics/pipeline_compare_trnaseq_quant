@@ -1077,9 +1077,31 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
     CompareTrnaSeq.makeMimseqIsodecoderQuant(infile, mapping_file, outfile, submit=True,  job_options=job_options)
 # Function to merge comparisons for decision, salmon-based and mimseq quant
 
+#####################################################
+# Summary of multiple mapping and agreement wit truth
+#####################################################
+@follows(compareTruthEstimateMimseq)
+@mkdir('multiple_mapped_summary.dir')
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
+           regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
+           r'multiple_mapped_summary.dir/\1_\2.\3.\4.tsv')
+def summariseMultimappedTruth2Assignment(infiles, outfile):
+    'Summarise reads as single/multi mapped and correct/incorrect at the anticodon level'
+
+    infile, isodecoder_mapping = infiles
+
+    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.summariseMultimappedTruth2Assignment(infile, outfile, submit=True, job_options=job_options)
+
 ###################################################
 # Alignment confusion matrices
 ###################################################
+
+
+
 @follows(compareTruthEstimateMimseq)
 @mkdir('truth2assignment.dir')
 @transform((alignWithBowtie2,

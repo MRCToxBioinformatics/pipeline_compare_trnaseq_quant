@@ -334,6 +334,45 @@ def mergeDecisionEstimateWithTruth(truth, estimate_infile, input_file, simulatio
 
 
 @cluster_runnable
+def summariseMultimappedTruth2Assignment(infile, outfile):
+
+    events = defaultdict(Counter)
+
+    for read_group in bam.iterate_reads(pysam.Samfile(infile)):
+
+        assignments = set([read.reference_name for read in read_group if read.reference_name is not None])
+
+        # all the read group queries are the same,
+        # so just take one and strip the trailing '_x',
+        # where x can be any length number
+        truth = re.sub('_\d+$', '', read_group.pop().query_name)
+        truth_anticodon = re.sub('\d$', '', '-'.join(truth.split('-')[0:3]).replace('tRX', 'tRNA'))
+
+        assignment_anticodons = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in assignments]
+
+        if n_assignments == len(assignments):
+            assignment_anticodon = assignment_anticodons.pop()
+            if assignment_anticodon == truth_anticodon
+                events['single']['correct'] += 1
+            else:
+                events['single']['incorrect'] += 1
+        else:
+            if length(assignment_anticodons) == 1:
+                assignment_anticodon = assignment_anticodons.pop()
+                if assignment_anticodon == truth_anticodon:
+                    events['multiple']['correct'] += 1
+                else:
+                    events['multiple']['incorrect - single'] += 1
+            else:
+                events['multiple']['incorrect - multiple'] += 1
+
+    with open(outfile, 'w') as outf:
+        outf.write('\t'.join(('alignments', 'agreement', 'count')) + '\n')
+        for k,v in events.items():
+            for k2, c in v.items():
+                outf.write('\t'.join(map(str, (k, k2, c))) + '\n')
+
+@cluster_runnable
 def getTruth2Assignment(infile, isodecoder_mapping, outfile):
 
     truth2assignment = defaultdict(Counter)
