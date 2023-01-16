@@ -870,7 +870,7 @@ def quantWithSalmon(infiles, outfile):
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon! (only needed for non-HPC runs)
 @jobs_limit(PARAMS['mimseq_max_sim_tasks'])
 @mkdir('mimseq.dir')
-@collate((simulation_uniform, simulation_realistic),
+@collate((simulation_uniform, simulation_realistic, simulation_null),
          regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
          add_inputs(filterNucFasta, filterMtFasta),
          r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
