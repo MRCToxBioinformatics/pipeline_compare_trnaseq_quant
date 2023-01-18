@@ -366,7 +366,7 @@ def summariseMultimappedTruth2Assignment(infile, outfile):
                     events['multiple']['single']['incorrect'] += 1
             else:
                 events['multiple']['multiple']['incorrect'] += 1
-   
+
     outf = open(outfile, 'w')
     outf.write('\t'.join(('alignments', 'anticodons', 'agreement', 'count')) + '\n')
     for k,v in events.items():
@@ -482,6 +482,25 @@ def getTruth2AssignmentMimSeq(infile, mimseq_isodecoder_counts, isodecoder_mappi
 
     t2a_df_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
     t2a_df_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
+
+#mimtRNAseq_Hsap_iPSC_rep2.0.simulation_uniform.bowtie2.tsv
+@cluster_runnable
+def mergesummariseMultimapped(infiles, outfile):
+    dfs = []
+    for infile in infiles:
+        input_file = os.path.basename(infile).split('.')[0]
+        simulation_n = os.path.basename(infile).split('.')[1]
+        quant_method = os.path.basename(infile).split('.')[3]
+
+        df = pd.read_csv(infile, sep='\t')
+        df['input_file']=input_file
+        df['simulation_n']=simulation_n
+        df['quant_method']=quant_method
+
+        dfs.append(df)
+
+    df = pd.concat(dfs)
+    df.to_csv(outfile, sep='\t', index=False)
 
 
 @cluster_runnable

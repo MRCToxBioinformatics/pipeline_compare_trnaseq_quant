@@ -1093,6 +1093,18 @@ def summariseMultimappedTruth2Assignment(infile, outfile):
 
     CompareTrnaSeq.summariseMultimappedTruth2Assignment(infile, outfile, submit=True, job_options=job_options)
 
+
+@mkdir('final_results.dir')
+@collate(summariseMultimappedTruth2Assignment,
+         regex('multiple_mapped_summary.dir/(\S+)\.(\d+)\.(simulation_\S+)\.(\S+)\.tsv'),
+         r'final_results.dir/multiple_mapped_summary.\3.tsv')
+def mergeTruth2Assignment(infiles, outfile):
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.mergesummariseMultimapped(infiles, outfile, submit=True, job_options=job_options)
+
 ###################################################
 # Alignment confusion matrices
 ###################################################
