@@ -336,7 +336,8 @@ def mergeDecisionEstimateWithTruth(truth, estimate_infile, input_file, simulatio
 @cluster_runnable
 def summariseMultimappedTruth2Assignment(infile, outfile):
 
-    events = defaultdict(Counter)
+    # events keys:values are assignments:anticodons:correct:count
+    events = defaultdict(lambda: defaultdict(Counter))
 
     for read_group in bam.iterate_reads(pysam.Samfile(infile)):
 
@@ -350,27 +351,29 @@ def summariseMultimappedTruth2Assignment(infile, outfile):
 
         assignment_anticodons = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in assignments]
 
-        if n_assignments == len(assignments):
+        if len(assignments) == 1:
             assignment_anticodon = assignment_anticodons.pop()
-            if assignment_anticodon == truth_anticodon
-                events['single']['correct'] += 1
+            if assignment_anticodon == truth_anticodon:
+                events['single']['single']['correct'] += 1
             else:
-                events['single']['incorrect'] += 1
+                events['single']['single']['incorrect'] += 1
         else:
-            if length(assignment_anticodons) == 1:
+            if len(set(assignment_anticodons)) == 1:
                 assignment_anticodon = assignment_anticodons.pop()
                 if assignment_anticodon == truth_anticodon:
-                    events['multiple']['correct'] += 1
+                    events['multiple']['single']['correct'] += 1
                 else:
-                    events['multiple']['incorrect - single'] += 1
+                    events['multiple']['single']['incorrect'] += 1
             else:
-                events['multiple']['incorrect - multiple'] += 1
-
-    with open(outfile, 'w') as outf:
-        outf.write('\t'.join(('alignments', 'agreement', 'count')) + '\n')
-        for k,v in events.items():
-            for k2, c in v.items():
-                outf.write('\t'.join(map(str, (k, k2, c))) + '\n')
+                events['multiple']['multiple']['incorrect'] += 1
+   
+    outf = open(outfile, 'w')
+    outf.write('\t'.join(('alignments', 'anticodons', 'agreement', 'count')) + '\n')
+    for k,v in events.items():
+        for k2, v2 in v.items():
+            for k3, c in v2.items():
+                outf.write('\t'.join(map(str, (k, k2, k3, c))) + '\n')
+    outf.close()
 
 @cluster_runnable
 def getTruth2Assignment(infile, isodecoder_mapping, outfile):

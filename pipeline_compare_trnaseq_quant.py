@@ -1080,16 +1080,13 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
 #####################################################
 # Summary of multiple mapping and agreement wit truth
 #####################################################
-@follows(compareTruthEstimateMimseq)
 @mkdir('multiple_mapped_summary.dir')
 @transform((alignWithBowtie2,
             alignWithSHRiMP),
            regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
            r'multiple_mapped_summary.dir/\1_\2.\3.\4.tsv')
-def summariseMultimappedTruth2Assignment(infiles, outfile):
+def summariseMultimappedTruth2Assignment(infile, outfile):
     'Summarise reads as single/multi mapped and correct/incorrect at the anticodon level'
-
-    infile, isodecoder_mapping = infiles
 
     job_options = PARAMS['cluster_options'] + " -t 2:00:00"
     job_condaenv=PARAMS['conda_base_env']
@@ -1180,7 +1177,9 @@ def simulate():
     pass
 
 
-@follows(summariseIndividualAlignments, summariseMergedAlignments)
+@follows(summariseIndividualAlignments,
+         summariseMergedAlignments,
+         summariseMultimappedTruth2Assignment)
 def summariseAlignments():
     'summarise the alignments with real reads'
     pass
