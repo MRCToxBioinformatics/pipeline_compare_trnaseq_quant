@@ -57,9 +57,9 @@ def mapModomics2fasta(fasta_infile,
 
     fasta_sequences = SeqIO.parse(open(fasta_infile),'fasta')
 
-    anticodon_sequences = collections.defaultdict(
-        lambda: collections.defaultdict(
-            lambda: collections.defaultdict(list)))
+    anticodon_sequences = defaultdict(
+        lambda: defaultdict(
+            lambda: defaultdict(list)))
 
     for entry in fasta_sequences:
         species, amino_acid, anticodon, transcript_id, genome_id = entry.name.split('-')

@@ -462,6 +462,9 @@ def mapModomics2fasta(infile, outfile):
     modification_index = PARAMS['modification_index']
     modomics_json = PARAMS['modomics_json']
 
+    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
     CompareTrnaSeq.mapModomics2fasta(
         infile, modomics_json, modification_index, outfile,
         submit=True, job_options=job_options)
