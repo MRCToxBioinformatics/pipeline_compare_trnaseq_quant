@@ -466,6 +466,19 @@ def mapModomics2fasta(infile, outfile):
         infile, modomics_json, modification_index, outfile,
         submit=True, job_options=job_options)
 
+
+@merge(summariseMergedAlignments,
+       add_inputs(mapModomics2fasta),
+       'known_modifications.dir/mutations_vs_modomics.tsv')
+def mergeMutationProfileModomics(infiles, outfile):
+
+    infiles, modomics_positions = infiles
+
+    CompareTrnaSeq.mergeMutationProfileModomics(
+        infiles, modomics_positions, outfile,
+        submit=True, job_options=job_options)
+
+
 ###################################################
 # simulate reads
 ###################################################
