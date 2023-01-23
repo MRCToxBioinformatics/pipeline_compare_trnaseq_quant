@@ -7,6 +7,8 @@ import pandas as pd
 from collections import Counter, defaultdict
 import re
 import os
+import pickle
+
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.Seq import Seq
@@ -68,7 +70,7 @@ def mapModomics2fasta(fasta_infile,
 
     outf = open(outfile, 'w')
     outf.write('\t'.join(('modomics_position', 'fasta_position', 'modification', 'fasta_entry')) + '\n')
-    
+
     for row in sequences_df.itertuples():
         if re.search('mitochondrion', row.organellum):
             continue
@@ -129,6 +131,54 @@ def mapModomics2fasta(fasta_infile,
                          keep_entry.name])) + '\n')
 
     outf.close()
+
+@cluster_runnable
+def mergeMutationProfileModomics(pickle_infiles, modomics_positions, outfile):
+
+    mutation_df = []
+
+    for infile in pickle_infiles:
+
+        alignment_summary = pickle.load(open(infile, 'rb'))
+
+        sample_name = os.path.basename(infile).replace('.merged.summariseAlignments.pickle', '')
+        quant_method = sample_name.split('_')[0]
+        sample = '_'.join(sample_name.split('_')[1:]).replace('Hsap_', '')
+
+        mutations = []
+
+        for trna in alignment_summary.contig_base_frequencies:
+            #if trna != toi: # save runtime & memory
+            #    continue
+            for position, all_base_counts in alignment_summary.contig_base_frequencies[trna].items():
+                for ref_base, base_counts in all_base_counts.items():
+                    total_counts = sum(base_counts.values())
+                    if total_counts>0:
+                        for obs_base, count in base_counts.items():
+                            if(obs_base != ref_base):
+                                mutations.append([sample, quant_method, trna,
+                                                  position, ref_base, obs_base,
+                                                  count, total_counts,
+                                                  count/total_counts])
+
+        mutation_df.append(pd.DataFrame.from_records(
+            mutations, columns=['sample', 'quant_method', 'trna', 'position', 'ref_base',
+                                'obs_base', 'count', 'total_counts', 'mutation_rate']))
+
+    mutation_df = pd.concat(mutation_df)
+
+    modomics_modifications = pd.read_table(modomics_positions)
+
+    keep_trnas = set(modomics_modifications['fasta_entry'])
+    mutation_df_with_modomics = mutation_df[[x in keep_trnas for x in mutation_df['trna']]]
+
+    mutation_df_with_modomics_modifications = pd.merge(mutation_df_with_modomics,
+                 modomics_modifications,
+                 left_on=['position', 'trna'],
+                 right_on=['fasta_position', 'fasta_entry'],
+                 how='left')
+
+    mutation_df_with_modomics_modifications.to_csv(outfile, sep='\t', index=False)
 
 
 @cluster_runnable
