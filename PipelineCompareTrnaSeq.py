@@ -8,6 +8,8 @@ from collections import Counter, defaultdict
 import re
 import os
 from Bio import SeqIO
+from Bio import pairwise2
+from Bio.Seq import Seq
 
 def filterFasta(infile, outfile):
     with open(outfile, 'w') as outf:
@@ -22,6 +24,112 @@ def updateMtFastaNaming(infile, outfile):
             _, species, __, aa, ac = trna_record.id.split('|')
             trna_record.id = '-'.join([species + '_MTtRNA', aa, ac, '1', '1'])
             SeqIO.write(trna_record, outf, "fasta")
+
+
+@cluster_runnable
+def mapModomics2fasta(fasta_infile,
+                      modomics_json,
+                      modification_index,
+                      outfile,
+                      alignment_score_threshold = 65):
+    '''
+    Take the Modomics modifications and map them to the tRNA sequences
+
+    For this, we need the MODOMICS modifications (in json format) and
+    a file mapping the MODOMICS code to nucleotide (modification_index) and,
+    finally, the fasta file of tRNA sequences
+    '''
+
+    mod_code_to_base = {}
+    mod_code_to_mod_name = {}
+
+    with open(modification_index, 'r') as inf:
+        header = inf.readline()
+        for line in inf:
+            mod_code, name, short_name, code, moiety_type = [x for x in line.strip('"').split('","')]
+            if code == '""':
+                code = '"'
+            if code != '':
+                mod_code_to_base[code] = mod_code[-1:]
+                mod_code_to_mod_name[code] = short_name
+
+    sequences_df = pd.read_json(modomics_json).transpose()
+
+    fasta_sequences = SeqIO.parse(open(fasta_infile),'fasta')
+
+    anticodon_sequences = collections.defaultdict(
+        lambda: collections.defaultdict(
+            lambda: collections.defaultdict(list)))
+
+    for entry in fasta_sequences:
+        species, amino_acid, anticodon, transcript_id, genome_id = entry.name.split('-')
+        species = species.replace('_tRNA', '').replace('_', ' ')
+        anticodon_sequences[species][amino_acid][anticodon].append(entry)
+
+    outf = open(outfile, 'w')
+    outf.write('\t'.join(('modomics_position', 'fasta_position', 'modification', 'fasta_entry')) + '\n')
+    
+    for row in sequences_df.itertuples():
+        if re.search('mitochondrion', row.organellum):
+            continue
+
+        #print(row.subtype, row.anticodon)
+        sequence_no_mod = ''
+        mod_positions = {}
+        for pos, base in enumerate(row.seq):
+            if base not in ['C', 'A', 'G', 'U']:
+                if base not in mod_code_to_base:
+                    raise ValueError(sprintf(
+                        'No mapping available from character to modification: %s' % base))
+                mod_positions[pos] = mod_code_to_mod_name[base]
+                base = mod_code_to_base[base]
+            sequence_no_mod+=base
+
+        keep_alignments = []
+
+        for anticodon in anticodon_sequences[row.organism][row.subtype]:
+            for entry in anticodon_sequences[row.organism][row.subtype][anticodon]:
+                seq1 = Seq(sequence_no_mod)
+                seq2 = Seq(str(entry.seq).replace('T', 'U'))
+
+                # Finding similarities
+                alignment = pairwise2.align.localms(seq1, seq2, 1, -1, -1, -.1, one_alignment_only=True)[0]
+
+                if alignment.score > alignment_score_threshold:
+                    keep_alignments.append((entry, alignment))
+
+
+        for keep_alignment in keep_alignments:
+
+            keep_entry, keep_alignment = keep_alignment
+
+            mod_pos = 0
+            fasta_pos = 0
+            mod_to_fasta_pos = {}
+            for mod_seq_base, fasta_seq_base in zip(keep_alignment.seqA,
+                                                    keep_alignment.seqB):
+                if(mod_seq_base==fasta_seq_base):
+                    mod_to_fasta_pos[mod_pos] = fasta_pos
+                    mod_pos +=1
+                    fasta_pos +=1
+                elif(fasta_seq_base=='-'):
+                    mod_pos +=1
+                elif(mod_seq_base=='-'):
+                    fasta_pos +=1
+                else:
+                    mod_pos +=1
+                    fasta_pos +=1
+
+            for mod_position in mod_positions:
+                if(mod_position in mod_to_fasta_pos):
+                    outf.write('\t'.join(map(str,
+                        [mod_position,
+                         mod_to_fasta_pos[mod_position],
+                         mod_positions[mod_position],
+                         keep_entry.name])) + '\n')
+
+    outf.close()
+
 
 @cluster_runnable
 def mergeMimSeqIsodecoderMaps(infiles, outfile):

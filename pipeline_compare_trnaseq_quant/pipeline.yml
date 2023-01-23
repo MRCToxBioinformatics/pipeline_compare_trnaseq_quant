@@ -20,6 +20,13 @@ trna_mt_sequences_infile: './hg38-mitotRNAs.fa'
 #https://raw.githubusercontent.com/nedialkova-lab/mim-tRNAseq/master/mimseq/data/hg38-eColitK/hg38-tRNAs-detailed.out
 trna_scan_infile: './hg38-tRNAs-detailed.out'
 
+# Obtained from https://genesilico.pl/modomics/modifications -> CSV
+modification_index: 'index.csv'
+
+# Obtained from e.g https://www.genesilico.pl/modomics/api/sequences?RNAtype=tRNA&organism=Homo+sapiens&format=json
+modomics_json: sequences.json
+
+
 simulation:
 
   # How many iterations per simulation (note that uniform is only done once)

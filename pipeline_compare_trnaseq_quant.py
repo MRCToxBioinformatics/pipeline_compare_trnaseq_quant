@@ -426,7 +426,7 @@ def summariseMergedAlignments(infiles, outfile):
     infile, trna_fasta = infiles
 
     job_options = PARAMS['cluster_options'] + " -t 2:00:00"
-    job_condaenv=PARAMS['conda_base_env']
+    job_condaenv = PARAMS['conda_base_env']
 
     CompareTrnaSeq.summariseAlignments(infile, trna_fasta, outfile, submit=True, job_options=job_options)
 
@@ -444,6 +444,28 @@ def defineCommonGenesPerMethod(infiles, outfile):
     with open(outfile, 'w') as outf:
         for gene in common_genes:
             outf.write('%s\n' % gene)
+
+
+###################################################
+# compare errors to known modifications
+###################################################
+
+@mkdir('known_modifications.dir')
+@transform(mergeNucMtSequences,
+           regex('.*'),
+           'known_modifications.dir/modomics_mapped_to_fasta.tsv')
+def mapModomics2fasta(infile, outfile):
+    '''
+    Take the Modomics modifications and map them to the tRNA sequences
+    '''
+
+    modification_index = PARAMS['modification_index']
+    modomics_json = PARAMS['modomics_json']
+
+    CompareTrnaSeq.mapModomics2fasta(
+        infile, modomics_json, modification_index, outfile,
+        submit=True, job_options=job_options)
+
 ###################################################
 # simulate reads
 ###################################################
