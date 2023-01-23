@@ -450,10 +450,10 @@ def defineCommonGenesPerMethod(infiles, outfile):
 # compare errors to known modifications
 ###################################################
 
-@mkdir('known_modifications.dir')
+@mkdir('final_results.dir')
 @transform(mergeNucMtSequences,
-           regex('.*'),
-           'known_modifications.dir/modomics_mapped_to_fasta.tsv')
+           regex('trna_sequences.dir/trna_sequences_all.fa'),
+           r'final_results.dir/modomics_mapped_to_fasta.tsv')
 def mapModomics2fasta(infile, outfile):
     '''
     Take the Modomics modifications and map them to the tRNA sequences
@@ -469,13 +469,15 @@ def mapModomics2fasta(infile, outfile):
         infile, modomics_json, modification_index, outfile,
         submit=True, job_options=job_options)
 
-
+@follows(mapModomics2fasta)
 @merge(summariseMergedAlignments,
-       add_inputs(mapModomics2fasta),
-       'known_modifications.dir/mutations_vs_modomics.tsv')
+       'final_results.dir/mutations_vs_modomics.tsv')
 def mergeMutationProfileModomics(infiles, outfile):
 
-    infiles, modomics_positions = infiles
+    modomics_positions = 'final_results.dir/modomics_mapped_to_fasta.tsv'
+
+    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.mergeMutationProfileModomics(
         infiles, modomics_positions, outfile,

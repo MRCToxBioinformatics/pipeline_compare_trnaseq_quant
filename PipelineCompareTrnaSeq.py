@@ -64,6 +64,7 @@ def mapModomics2fasta(fasta_infile,
             lambda: defaultdict(list)))
 
     for entry in fasta_sequences:
+        entry.seq = entry.seq.upper()
         species, amino_acid, anticodon, transcript_id, genome_id = entry.name.split('-')
         species = species.replace('_tRNA', '').replace('_', ' ')
         anticodon_sequences[species][amino_acid][anticodon].append(entry)
@@ -95,7 +96,13 @@ def mapModomics2fasta(fasta_infile,
                 seq2 = Seq(str(entry.seq).replace('T', 'U'))
 
                 # Finding similarities
-                alignment = pairwise2.align.localms(seq1, seq2, 1, -1, -1, -.1, one_alignment_only=True)[0]
+                try:
+                    alignment = pairwise2.align.localms(seq1, seq2, 1, -1, -1, -.1, one_alignment_only=True)[0]
+
+                except:
+                    print(seq1)
+                    print(seq2)
+                    raise ValueError()
 
                 if alignment.score > alignment_score_threshold:
                     keep_alignments.append((entry, alignment))
