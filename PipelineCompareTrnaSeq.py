@@ -140,9 +140,10 @@ def mapModomics2fasta(fasta_infile,
     outf.close()
 
 @cluster_runnable
-def mergeMutationProfileModomics(pickle_infiles, modomics_positions, outfile):
+def mergeMutationProfileModomics(pickle_infiles, modomics_positions, outfile_mutations, outfile_read_end, outfile_truncations):
 
     mutation_df = []
+    start_df = []
 
     for infile in pickle_infiles:
 
@@ -153,6 +154,7 @@ def mergeMutationProfileModomics(pickle_infiles, modomics_positions, outfile):
         sample = '_'.join(sample_name.split('_')[1:]).replace('Hsap_', '')
 
         mutations = []
+        starts = []
 
         for trna in alignment_summary.contig_base_frequencies:
             #if trna != toi: # save runtime & memory
@@ -167,14 +169,23 @@ def mergeMutationProfileModomics(pickle_infiles, modomics_positions, outfile):
                                                   position, ref_base, obs_base,
                                                   count, total_counts,
                                                   count/total_counts])
+                for start_counts in alignment_summary.alignment_coordinates[trna].values():
+                    for start, count in start_counts.items():
+                        starts.append([sample, quant_method, trna, start, count])
 
         mutation_df.append(pd.DataFrame.from_records(
             mutations, columns=['sample', 'quant_method', 'trna', 'position', 'ref_base',
                                 'obs_base', 'count', 'total_counts', 'mutation_rate']))
 
-    mutation_df = pd.concat(mutation_df)
+        start_df.append(pd.DataFrame.from_records(
+            starts, columns=['sample', 'quant_method', 'trna', 'start', 'frequency']))
 
-    modomics_modifications = pd.read_table(modomics_positions)
+    ###
+    # merge the mutations and modomics positions
+    mutation_df = pd.concat(mutation_df)
+    
+    # can be multiple rows with the same modification information
+    modomics_modifications = pd.read_table(modomics_positions).drop_duplicates()
 
     keep_trnas = set(modomics_modifications['fasta_entry'])
     mutation_df_with_modomics = mutation_df[[x in keep_trnas for x in mutation_df['trna']]]
@@ -185,9 +196,44 @@ def mergeMutationProfileModomics(pickle_infiles, modomics_positions, outfile):
                  right_on=['fasta_position', 'fasta_entry'],
                  how='left')
 
-    mutation_df_with_modomics_modifications.to_csv(outfile, sep='\t', index=False)
+    mutation_df_with_modomics_modifications.to_csv(outfile_mutations, sep='\t', index=False)
+    ###
+
+    ###
+    # merge the start positions (end of read) and modomics positions
+    start_df = pd.concat(start_df)
+
+    start_df_summary = start_df.groupby(['quant_method', 'start']).agg(
+        total_frequency=pd.NamedAgg(column='frequency', aggfunc=sum)).reset_index()
+
+    start_df_summary.to_csv(outfile_read_end, sep='\t', index=False)
 
 
+    modomics_modifications['0'] = modomics_modifications['fasta_position']
+    modomics_modifications['-1'] = [x+1 for x in modomics_modifications['0']]
+    modomics_modifications['+1'] = [x-1 for x in modomics_modifications['0']]
+    
+    modomics_modifications_plus_minus_one = pd.melt(
+        modomics_modifications[['fasta_entry', 'modification', '0', '-1', '+1']],
+        id_vars=['fasta_entry', 'modification'],
+        value_vars=['0', '-1', '+1'],
+        var_name='relative_to_mod_position',
+        value_name='fasta_position')
+
+    start_df = start_df.groupby(['sample', 'quant_method', 'trna', 'start']).agg({'frequency' : 'sum'}).reset_index()
+
+    start_df_with_modomics = start_df[[x in keep_trnas for x in start_df['trna']]]
+
+    start_df_with_modomics_modifications = pd.merge(
+        start_df_with_modomics,
+        modomics_modifications_plus_minus_one,
+        left_on=['start', 'trna'],
+        right_on=['fasta_position', 'fasta_entry'],
+        how='left')
+
+    start_df_with_modomics_modifications.to_csv(outfile_truncations, sep='\t', index=False)
+    ###
+    
 @cluster_runnable
 def mergeMimSeqIsodecoderMaps(infiles, outfile):
 

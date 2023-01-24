@@ -467,21 +467,25 @@ def mapModomics2fasta(infile, outfile):
 
     CompareTrnaSeq.mapModomics2fasta(
         infile, modomics_json, modification_index, outfile,
-        submit=True, job_options=job_options)
+        submit=False, job_options=job_options)
 
 @follows(mapModomics2fasta)
 @merge(summariseMergedAlignments,
-       'final_results.dir/mutations_vs_modomics.tsv')
-def mergeMutationProfileModomics(infiles, outfile):
+       ['final_results.dir/mutations_vs_modomics.tsv',
+        'final_results.dir/truncations_summary.tsv',
+        'final_results.dir/truncations_vs_modomics.tsv'])
+def mergeMutationProfileModomics(infiles, outfiles):
 
+    outfile_mutations, outfile_read_end, outfile_truncations = outfiles
     modomics_positions = 'final_results.dir/modomics_mapped_to_fasta.tsv'
 
     job_options = PARAMS['cluster_options'] + " -t 2:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.mergeMutationProfileModomics(
-        infiles, modomics_positions, outfile,
-        submit=True, job_options=job_options)
+        infiles, modomics_positions,
+        outfile_mutations, outfile_read_end, outfile_truncations,
+        submit=False, job_options=job_options)
 
 
 ###################################################
