@@ -47,6 +47,10 @@ shrimp:
 
 bowtie2:
   threads: 1
-
-bwa2:
+  d_values: '10,20,30,40,50,60,70,80,90,100'
+  l_values: '10,12,14,16,18,20'
+  n_values: '0,1'
+bwamem:
   threads: 1
+  k_values: '7,9,11,13,15,19'
+  r_values: '1,1.1,1.2,1.3,1.4,1.5'

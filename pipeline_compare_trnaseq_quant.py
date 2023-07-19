@@ -171,6 +171,215 @@ def buildSegemehlIndex(infile, outfile):
     P.run(statement)
 
 ###################################################
+# Simulation full length no mutations and compare alignment strategies
+
+@transform(mergeNucMtSequences,
+           suffix('.fa'),
+           '_simulation_no_error.fastq.gz')
+def simulation_no_errors(infile, outfile):
+
+    n_reads = int(PARAMS['simulation_uniform_reads'])
+
+    gt = simulateReads.make_gt(infile, n_reads, 1, 0, filter='\-Und\-')
+
+    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+
+    CompareTrnaSeq.simulate_reads(
+        infile=infile,
+        outfile=outfile,
+        ground_truth=gt,
+        mutation_threshold=None,
+        error_rate=0.001,
+        truncate=False,
+        outfile_gt=outfile + '.gt',
+        submit=True,
+        job_options=job_options)
+
+
+no_errors_alignment_params_files = []
+for d_value in P.as_list(PARAMS['bowtie2_d_values']):
+    for l_value in P.as_list(PARAMS['bowtie2_l_values']):
+        for n_value in P.as_list(PARAMS['bowtie2_n_values']):
+            no_errors_alignment_params_files.append(
+                'no_errors_aligment_params.dir/d%s_l%s_n%s_bowtie2.tsv' % (d_value, l_value, n_value))
+
+
+for k_value in P.as_list(PARAMS['bwamem_k_values']):
+    for r_value in P.as_list(PARAMS['bwamem_r_values']):
+        no_errors_alignment_params_files.append(
+        'no_errors_aligment_params.dir/k%s_r%s_bwamem.tsv' % (k_value, r_value))
+
+
+@mkdir('no_errors_aligment_params.dir')
+@originate(no_errors_alignment_params_files)
+def create_no_errors_sim_alignment_param_files(output_file):
+    with open(output_file, "w"):
+        pass
+
+
+
+@mkdir('simulation_no_errors.dir')
+@transform(create_no_errors_sim_alignment_param_files,
+           regex('no_errors_aligment_params.dir/(\S+)_bwamem.tsv'),
+           add_inputs(simulation_no_errors, buildBWAIndex),
+           r"simulation_no_errors.dir/bwamem_\1_ReportSingle.bam")
+def mapSimulationNoErrorsBwamemSingleReport(infiles, outfile):
+    '''
+    Map reads to the tRNA sequences, reporting only one alignment per read
+    '''
+
+    params_dummy, infile, bwa_index = infiles
+    
+    bwa_index = iotools.snip(bwa_index, '.bwt')
+
+    tmp_file = P.get_temp_filename()
+
+    k_value, r_value = [x[1:] for x in os.path.basename(params_dummy).strip('_bwamem.tsv').split('_')]
+
+    statement = '''
+    bwa mem
+    -k %(k_value)s
+    -r %(r_value)s
+    -T 15
+    %(bwa_index)s %(infile)s
+    > %(tmp_file)s 2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
+    samtools index %(outfile)s;
+    rm -f %(tmp_file)s
+    ''' % locals()
+
+    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
+
+
+@mkdir('simulation_no_errors.dir')
+@transform(create_no_errors_sim_alignment_param_files,
+           regex('no_errors_aligment_params.dir/(\S+)_bowtie2.tsv'),
+           add_inputs(simulation_no_errors, buildBowtie2Index),
+           r"simulation_no_errors.dir/bowtie2_\1_ReportSingle.bam")
+def mapSimulationNoErrorsBowtie2SingleReport(infiles, outfile):
+    '''
+    Map reads to the tRNA sequences, reporting only one alignment per read
+    '''
+
+    params_dummy, infile, bowtie2_index = infiles
+
+    d_value, l_value, n_value = [x[1:] for x in os.path.basename(params_dummy).strip('_bowtie2.tsv').split('_')]
+
+    bowtie2_index = iotools.snip(bowtie2_index, '.1.bt2')
+
+    tmp_file = P.get_temp_filename()
+
+    statement = '''
+    bowtie2
+    --min-score G,1,8
+    --local
+    -D %(d_value)s
+    -N %(n_value)s
+    -L %(l_value)s
+    -R 3
+    -i S,1,0.5
+    -x %(bowtie2_index)s
+    -U %(infile)s
+    -S %(tmp_file)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
+    samtools index %(outfile)s;
+    rm -f %(tmp_file)s
+    ''' % locals()
+
+    job_options = PARAMS['cluster_options'] + " -t 8:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
+
+
+@mkdir('truth2assignment_no_errors.dir')
+@transform((mapSimulationNoErrorsBowtie2SingleReport, mapSimulationNoErrorsBwamemSingleReport),
+           regex('simulation_no_errors.dir/(\S+)_ReportSingle.bam'),
+           r'truth2assignment_no_errors.dir/\1_truth2assignment.tsv')
+def getTruth2AssignmentNoErrors(infile, outfile):
+    'Get the tally of ground truths to assignments'
+
+    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.getTruth2Assignment(infile, outfile, submit=True, job_options=job_options)
+
+    
+    
+@mkdir('final_results.dir')
+@collate(getTruth2AssignmentNoErrors,
+         regex('truth2assignment_no_errors.dir/(bowtie2|bwamem)_(\S+)_truth2assignment.tsv'),
+         r'final_results.dir/\1_truth2assignment_no_errors.tsv', r'\1')
+def mergeTruth2AssignmentNoErrors(infiles, outfile, aligner):
+
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    CompareTrnaSeq.mergeTruth2AssignmentNoErrors(infiles, outfile, aligner, submit=True, job_options=job_options)
+
+    infiles_anticodon  = [re.sub('.tsv$', '_anticodon.tsv', x) for x in infiles]
+    outfile_anticodon = re.sub('.tsv$', '_anticodon.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2AssignmentNoErrors(infiles_anticodon, outfile_anticodon, aligner, submit=True, job_options=job_options)
+
+    infiles_isodecoder  = [re.sub('.tsv$', '_isodecoder.tsv', x) for x in infiles]
+    outfile_isodecoder = re.sub('.tsv$', '_isodecoder.tsv', outfile)
+    CompareTrnaSeq.mergeTruth2AssignmentNoErrors(infiles_isodecoder, outfile_isodecoder, aligner, submit=True, job_options=job_options)
+
+
+####
+#
+
+@mkdir('multimapping.dir')
+@transform(SEQUENCEFILES,
+           SEQUENCEFILES_REGEX,
+           add_inputs(buildBowtie2Index),
+           r"multimapping.dir/\2_bowtie2ReportAll.bam")
+def alignWithBowtie2Multimapping(infiles, outfile):
+
+    infile, bowtie2_index = infiles
+
+    bowtie2_index = iotools.snip(bowtie2_index, '.1.bt2')
+
+    tmp_file = P.get_temp_filename()
+
+    job_threads = PARAMS['bowtie2_threads']
+
+    statement = '''
+    bowtie2
+    --min-score G,1,8
+    --local
+    -a
+    -D 100 -R 3 -N 1 -L 10
+    -i S,1,0.5
+    -p %(job_threads)s
+    -x %(bowtie2_index)s
+    -U %(infile)s
+    -S %(tmp_file)s
+    2> %(outfile)s.log;
+    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
+    ''' % locals()
+
+    job_options = PARAMS['cluster_options'] + " -t 8:00:00"
+    job_condaenv=PARAMS['conda_base_env']
+
+    P.run(statement)
+
+    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True, job_options=job_options)
+
+    os.unlink(tmp_file)
+
+
+
+
+###################################################
 # Learn mutation and truncation signatures
 
 
@@ -224,7 +433,7 @@ def mapWithBowtie2SingleReport(infiles, outfile):
     bowtie2
     --min-score G,1,8
     --local
-    -D 20 -R 3 -N 1 -L 10
+    -D 100 -R 3 -N 1 -L 10
     -i S,1,0.5
     -x %(bowtie2_index)s
     -U %(infile)s
@@ -236,7 +445,7 @@ def mapWithBowtie2SingleReport(infiles, outfile):
     rm -f %(tmp_file)s
     ''' % locals()
 
-    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
+    job_options = PARAMS['cluster_options'] + " -t 8:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
     P.run(statement)
@@ -369,9 +578,11 @@ def mapWithSegemehlSingleReport(infiles, outfile):
     P.run(statement)
 
 
+#@collate((mapWithBWAMEMSingleReport,
+#          mapWithBowtie2SingleReport,
+#          mapWithSHRiMP2SingleReport),
 @collate((mapWithBWAMEMSingleReport,
-          mapWithBowtie2SingleReport,
-          mapWithSHRiMP2SingleReport),
+          mapWithBowtie2SingleReport),
        regex('mut_trunc_sig.dir/(\S+)_(bwaMemReportSingle|bowtie2ReportSingle|SHRiMPReportSingle).bam'),
        r'mut_trunc_sig.dir/\1.merged.bam')
 def mergeSingleReports(infiles, outfile):
@@ -393,9 +604,11 @@ def mergeSingleReports(infiles, outfile):
     P.run(statement)
 
 
+#@transform((mapWithBWAMEMSingleReport,
+#            mapWithBowtie2SingleReport,
+#            mapWithSHRiMP2SingleReport,),
 @transform((mapWithBWAMEMSingleReport,
-            mapWithBowtie2SingleReport,
-            mapWithSHRiMP2SingleReport,),
+            mapWithBowtie2SingleReport),
            suffix('.bam'),
            add_inputs(mergeNucMtSequences),
            '.summariseAlignments.pickle')
@@ -623,7 +836,7 @@ def alignWithBWA(infiles, outfile):
     -T 15
     -a
     -t %(job_threads)s
-    %(bwa_index)s
+    %(bwamem_index)s
     %(infile)s
     > %(tmp_file)s
     2> %(outfile)s.log;
@@ -772,8 +985,9 @@ def alignWithGSNAP(infiles, outfile):
 # quantify
 ###################################################
 
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+#@transform((alignWithBowtie2,
+#            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_decision.individual',
            r'quant.dir/\1.\2.\3.gene_count_decision.isodecoder',
@@ -793,8 +1007,7 @@ def quantDiscreteCounts(infile, outfiles):
         submit=True,
         job_options=job_options)
 
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_fractional.individual',
            r'quant.dir/\1.\2.\3.gene_count_fractional.isodecoder',
@@ -839,8 +1052,7 @@ def quantDiscreteCountsMAPQ10(infile, outfiles):
          job_options=job_options)
 
 
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_no_multi.individual',
            r'quant.dir/\1.\2.\3.gene_count_no_multi.isodecoder',
@@ -861,8 +1073,7 @@ def quantDiscreteCountsNoMultimapping(infile, outfiles):
         submit=True,
      job_options=job_options)
 
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_random_single.individual',
            r'quant.dir/\1.\2.\3.gene_count_random_single.isodecoder',
@@ -884,8 +1095,7 @@ def quantDiscreteCountsRandomSingle(infile, outfiles):
      job_options=job_options)
 
 
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(mergeNucMtSequences),
            r'quant.dir/\1.\2.\3/quant.sf')
@@ -1125,8 +1335,7 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
 # Summary of multiple mapping and agreement wit truth
 #####################################################
 @mkdir('multiple_mapped_summary.dir')
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
            r'multiple_mapped_summary.dir/\1_\2.\3.\4.tsv')
 def summariseMultimappedTruth2Assignment(infile, outfile):
@@ -1157,8 +1366,7 @@ def mergeSummariseMultimapped(infiles, outfile):
 
 @follows(compareTruthEstimateMimseq)
 @mkdir('truth2assignment.dir')
-@transform((alignWithBowtie2,
-            alignWithSHRiMP),
+@transform(alignWithBowtie2,
            regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
            add_inputs(r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
                r'truth2assignment.dir/\1_\2.\3.\4.truth2assignment.tsv')
@@ -1170,7 +1378,7 @@ def getTruth2Assignment(infiles, outfile):
     job_options = PARAMS['cluster_options'] + " -t 2:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
-    CompareTrnaSeq.getTruth2Assignment(infile, isodecoder_mapping, outfile, submit=True, job_options=job_options)
+    CompareTrnaSeq.getTruth2Assignment(infile, outfile, isodecoder_mapping, submit=True, job_options=job_options)
 
 
 @follows(compareTruthEstimateMimseq)
@@ -1190,7 +1398,7 @@ def getTruth2AssignmentMimSeq(infiles, outfile):
     job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.getTruth2AssignmentMimSeq(
-        infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile, submit=True, job_options=job_options)
+        infile, mimseq_isodecoder_counts, outfile, isodecoder_mapping, submit=True, job_options=job_options)
 
 @mkdir('final_results.dir')
 @collate((getTruth2Assignment, getTruth2AssignmentMimSeq),
@@ -1235,7 +1443,8 @@ def simulate():
 
 @follows(summariseIndividualAlignments,
          summariseMergedAlignments,
-         summariseMultimappedTruth2Assignment)
+         summariseMultimappedTruth2Assignment,
+         mergeMutationProfileModomics)
 def summariseAlignments():
     'summarise the alignments with real reads'
     pass
@@ -1250,6 +1459,7 @@ def quant():
          compareTruthEstimateDecisionCounts,
          compareTruthEstimateMimseq,
          mergeCompareTruthEstimateMimseq,
+         mergeTruth2AssignmentNoErrors,
          makeMimseqIsodecoderQuant,
          mergeTruth2Assignment)
 def compare():

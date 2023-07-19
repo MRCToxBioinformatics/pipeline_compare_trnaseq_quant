@@ -278,8 +278,8 @@ def simulate_reads(infile,
                    error_rate,
                    mutation_threshold,
                    truncate,
-                   alignment_summary,
-                   summary_level,
+                   alignment_summary=None,
+                   summary_level='anticodon',
                    outfile_gt=None):
 
     ground_truth = simulateReads.simulate_reads(
@@ -587,7 +587,7 @@ def summariseMultimappedTruth2Assignment(infile, outfile):
     outf.close()
 
 @cluster_runnable
-def getTruth2Assignment(infile, isodecoder_mapping, outfile):
+def getTruth2Assignment(infile, outfile, isodecoder_mapping=None):
 
     truth2assignment = defaultdict(Counter)
 
@@ -626,19 +626,20 @@ def getTruth2Assignment(infile, isodecoder_mapping, outfile):
     t2a_df_isodecoder = t2a_df.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
     t2a_df_isodecoder.to_csv(re.sub('.tsv$', '_isodecoder.tsv', outfile), sep='\t')
 
-    # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
-    trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
-    trna2isodecoder = defaultdict(str, {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])})
+    if isodecoder_mapping is not None:
+        # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
+        trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
+        trna2isodecoder = defaultdict(str, {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])})
 
-    with open(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), 'w') as outf:
-        for x,y in trna2isodecoder.items():
-            outf.write("%s\t%s\n" % (x, y))
+        with open(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), 'w') as outf:
+            for x,y in trna2isodecoder.items():
+                outf.write("%s\t%s\n" % (x, y))
 
-    t2a_df_isodecoder['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['truth_isodecoder']]
-    t2a_df_isodecoder['assignment_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['assignment_isodecoder']]
+        t2a_df_isodecoder['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['truth_isodecoder']]
+        t2a_df_isodecoder['assignment_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['assignment_isodecoder']]
 
-    t2a_df_mimseq_isodecoder = t2a_df_isodecoder.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
-    t2a_df_mimseq_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
+        t2a_df_mimseq_isodecoder = t2a_df_isodecoder.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
+        t2a_df_mimseq_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
 
 
 
@@ -708,6 +709,33 @@ def mergesummariseMultimapped(infiles, outfile):
         df['simulation_n']=simulation_n
         df['quant_method']=quant_method
 
+        dfs.append(df)
+
+    df = pd.concat(dfs)
+    df.to_csv(outfile, sep='\t', index=False)
+
+
+@cluster_runnable
+def mergeTruth2AssignmentNoErrors(infiles, outfile, aligner):
+    dfs = []
+    for infile in infiles:
+        
+        df = pd.read_csv(infile, sep='\t')
+
+        if aligner == 'bowtie2':
+            d_value = os.path.basename(infile).split('_')[1][1:]
+            l_value = os.path.basename(infile).split('_')[2][1:]
+            n_value = os.path.basename(infile).split('_')[3][1:]
+
+            df['D']=d_value
+            df['L']=l_value
+            df['N']=n_value
+        elif aligner == 'bwamem':
+            k_value = os.path.basename(infile).split('_')[1][1:]
+            r_value = os.path.basename(infile).split('_')[2][1:]
+
+            df['K']=k_value
+            df['R']=r_value
         dfs.append(df)
 
     df = pd.concat(dfs)
