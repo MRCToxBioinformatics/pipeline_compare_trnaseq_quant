@@ -1,10 +1,17 @@
 import simulatetrna.simulateReads as simulateReads
 import simulatetrna.alignmentSummary as alignmentSummary
 import simulatetrna.bam as bam
+
 from cgatcore.pipeline import cluster_runnable
+
 import pysam
+
+import numpy as np
 import pandas as pd
+
 from collections import Counter, defaultdict
+from itertools import combinations
+
 import re
 import os
 import pickle
@@ -12,6 +19,252 @@ import pickle
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.Seq import Seq
+
+import networkx as nx
+from networkx.algorithms import community
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.colors import LinearSegmentedColormap
+
+
+inreads = pysam.Samfile(filtered_samfile, 'r')
+
+@cluster_runnable
+def getGraph(bamfile, nx_graph_outfile, egde_weights_outfile):
+    '''
+    bamfile = BAM with all top scoring alignments for each read, sorted in read order. Can
+    be obtained by e.g using -a with bowtie2 and then using simulatetrna.bam.filtersam()
+
+    nx_graph_outfile = Where to save the nx.graph
+
+    edge_weights_outfile = where to save the dictionary of weighted edges
+    '''
+
+    # Create dictionaries to hold the nx.Graphs and node and egde counts
+    G = {'gid':nx.Graph(),
+         'tid':nx.Graph(),
+         'ac':nx.Graph(),
+         'aa':nx.Graph()}
+
+    # Calculate the edge weights
+    node_counts = node_counts = {
+        'gid':collections.Counter(),
+        'tid':collections.Counter(),
+        'ac':collections.Counter(),
+        'aa':collections.Counter()}
+
+    edge_weights = {
+        'gid':collections.Counter(),
+        'tid':collections.Counter(),
+        'ac':collections.Counter(),
+        'aa':collections.Counter()}
+
+
+    # Iterate over alignments
+    for alignments in bam.iterate_reads(inreads, allow_multimapping=True, remove_trx=True, remove_mt=True):
+
+        alignments_reference = {
+            'gid': set([read.reference_name.split('_')[-1] for read in alignments]),
+            'tid': set(['-'.join(read.reference_name.split('_')[-1].split('-')[0:4]) for read in alignments]),
+            'ac': set(['-'.join(read.reference_name.split('_')[-1].split('-')[0:3]) for read in alignments]),
+            'aa': set(['-'.join(read.reference_name.split('_')[-1].split('-')[0:2]) for read in alignments])
+         }
+        
+        
+        for level in alignments_reference.keys():
+            
+            alignments = alignments_reference[level]
+        
+            if len(alignments) == 1:
+                # Single alignment, add the read to the corresponding node
+                # read = next(iter(alignments))
+
+                node = list(alignments)[0]
+
+                node_counts[level][node] += 1
+
+                G[level].add_node(node)
+
+            else:
+                # Multiple alignments, add each read to each edge for all pairs of nodes
+
+                for ref1, ref2 in combinations(alignments, 2):
+
+                    edge_key = frozenset((ref1, ref2))
+
+                    # Check if the edge key exists in the edge_weights dictionary
+
+                    edge_weights[level][edge_key] += 1
+
+                    G[level].add_edge(ref1, ref2)
+                
+    # recalculate the weights using the node counts. Weights are now bounded 0-1
+    recalculated_weights = {}
+    for level in alignments_reference.keys():
+        recalculated_weights[level] = {}
+        for edge, weight in edge_weights[level].items():
+            node1, node2 = edge
+            recalculated_weights[level][edge] = weight / (
+                weight + node_counts[level][node1] + node_counts[level][node2])
+
+
+    pickle.dump(recalculated_weights, open(edge_weights_outfile, 'wb'))
+    pickle.dump(G, open(nx_graph_outfile, 'wb'))
+
+
+def custom_cmap():
+    # Create a custom colormap that transitions from white (0.0) to blue (1.0)
+    cmap_colors = [(1, 1, 1), (0, 0, 1)]
+    return LinearSegmentedColormap.from_list("custom_cmap", cmap_colors)
+
+
+@cluster_runnable
+def plot_heatmap(edge_weights,
+                 output_filename,
+                 level='ac'
+                 dividing_lines=True,
+                 include_single = False,
+                 cmap_col=custom_cmap()):
+
+    '''
+    Plot a heatmap for the multimapping between tRNAs using the output from getGraph
+
+    edge_weights = normalised edge weights
+    output_filename = filepath for outfile
+    level = multimapping level to plot (aa=aminoacid, ac=anticodon, tid=transcriptID, gid=genomeLocusID)
+    '''
+
+    allowed_levels = ['aa', 'ac', 'gid', 'tid'] 
+
+    if level not in allowed_levels:
+        raise ValueError('level must be one of %' % ', '.join(allowed_levels))
+
+    if include_single == False:
+        # Remove singleton nodes
+        singleton_nodes = [node for node, degree in G[level].degree() if degree == 0]
+        G[level].remove_nodes_from(singleton_nodes)
+
+    else:
+        pass
+
+    # Get the list of nodes and their order in alphabetical order
+    nodes = sorted(list(G[level].nodes()))
+    num_nodes = len(nodes)
+
+    # Create an empty matrix to store the edge weights
+    edge_matrix = np.zeros((num_nodes, num_nodes))
+
+    # Populate the edge matrix with the logarithmic transformed edge weights
+    for edge in G[level].edges():
+        node1 = nodes.index(edge[0])
+        node2 = nodes.index(edge[1])
+        recalc_edge_weight = recalculated_weights[level].get(frozenset(edge), 0)
+        edge_matrix[node1, node2] = np.log1p(recalc_edge_weight)  # Apply logarithmic transformation
+        edge_matrix[node2, node1] = np.log1p(recalc_edge_weight)  # Also set the value for the symmetric edge
+
+    # Get the list of amino acid labels from the nodes
+    amino_acids = [node.split('-')[1] for node in nodes]
+
+    # Remove 'eColiLys' amino acid if present
+    if 'eColiLys' in amino_acids:
+        idx = amino_acids.index('eColiLys')
+        amino_acids.pop(idx)
+        edge_matrix = np.delete(edge_matrix, idx, axis=0)
+        edge_matrix = np.delete(edge_matrix, idx, axis=1)
+
+    
+    # Get unique amino acids and their corresponding indices
+    unique_amino_acids, amino_acid_indices = np.unique(amino_acids, return_inverse=True)
+
+    
+    num_unique_amino_acids = len(unique_amino_acids)
+
+    # Create the heatmap plot with the custom colormap
+    plt.figure(figsize=(7, 7))
+    heatmap = plt.imshow(edge_matrix, cmap=cmap_col, interpolation='nearest', vmin=0.0, vmax=1.0)
+
+    # Add color scale legend and adjust its size using the 'shrink' parameter
+    plt.colorbar(heatmap, shrink=0.5)
+
+    # Find the indices where the amino acid groups change
+    group_change_indices = np.where(np.diff(amino_acid_indices) != 0)[0]
+
+    if dividing_lines:
+    
+        # Loop through the group change indices and draw dividing lines
+        for idx in group_change_indices:
+            plt.axhline(y=idx+0.5, color='grey', linewidth=0.1, alpha=0.2)
+            plt.axvline(x=idx+0.5, color='grey', linewidth=0.1, alpha=0.2)
+
+        if level != 'aa':
+            # Get the list of amino acid labels from the nodes
+            ac = [node.split('-')[2] for node in nodes]
+
+            # Get unique amino acids and their corresponding indices
+            unique_ac, ac_indices = np.unique(ac, return_inverse=True)
+
+            # Find the indices where the amino acid groups change
+            ac_change_indices = np.where(np.diff(ac_indices) != 0)[0]
+
+            # Loop through the group change indices and draw dividing lines
+            for idx in ac_change_indices:
+                plt.axhline(y=idx+0.5, color='lightgrey', linewidth=0.05, alpha=0.2)
+                plt.axvline(x=idx+0.5, color='lightgrey', linewidth=0.05, alpha=0.2)
+
+        group_change_indices_inc_start_end = np.append(np.append(-1, group_change_indices), len(amino_acid_indices))
+
+        start_end = [x for x in zip(group_change_indices_inc_start_end[0::1], group_change_indices_inc_start_end[1::1])]
+
+        for start, end in start_end:
+            start = start+0.5
+            end = end+0.5
+            #Create a Rectangle patch
+            rect = patches.Rectangle((start, end), end-start, start-end,
+                                     edgecolor='darkgrey', linewidth=1, alpha=1, facecolor='none')
+
+            # Add the patch to the Axes
+            plt.gca().add_patch(rect)
+
+    # Add amino acid labels to the x and y axes
+    plt.xticks(np.arange(num_unique_amino_acids), [])
+    plt.yticks(np.arange(num_unique_amino_acids), [])
+
+    previous = None
+    previous_ix = None
+
+    # Loop through unique amino acids and add labels at their midpoints on x and y axes
+    previous = amino_acid_indices[0]
+    previous_ix = [0]
+    i = 0
+    for ix, aai in enumerate(amino_acid_indices[1:], start=1):
+
+        if aai == previous:
+            previous_ix.append(ix)
+        else:
+            current_index = np.mean(previous_ix)  # Midpoint of assigned indexes
+            amino_acid = unique_amino_acids[i]
+            plt.text(current_index, len(edge_matrix)+1, amino_acid, ha='center', va='top', fontsize=8, color='black', rotation=90)
+            plt.text(-2, current_index, amino_acid, ha='right', va='center', fontsize=7, color='black')
+
+            i += 1
+            
+            previous = aai
+            previous_ix = [ix]
+
+    current_index = np.mean(previous_ix)  # Midpoint of assigned indexes
+    amino_acid = unique_amino_acids[i]
+    plt.text(current_index, len(edge_matrix)+1, amino_acid, ha='center', va='top', fontsize=8, color='black', rotation=90)
+    plt.text(-2, current_index, amino_acid, ha='right', va='center', fontsize=7, color='black')            
+
+    # Remove ticks from both the x and y axes
+    plt.tick_params(axis='both', which='both', length=0)
+
+    # Save the figure with higher resolution
+    plt.savefig(output_filename, format='pdf', dpi=500)
+
+    plt.close()
+
 
 def filterFasta(infile, outfile):
     with open(outfile, 'w') as outf:
