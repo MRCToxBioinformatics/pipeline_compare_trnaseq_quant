@@ -380,15 +380,15 @@ def alignWithBowtie2Multimapping(infiles, outfile):
 
 @transform(alignWithBowtie2Multimapping,
            suffix('_bowtie2ReportAll.bam'),
-           ['.mm_nxgraph.pickle', '.mm_edge_weights.pickle'])
+           ['.mm_edge_weights.pickle', '.mm_nxgraph.pickle'])
 def getMultimappingGraph(infile, outfiles):
     '''
     Use CompareTrnaSeq.getGraph to get the graph and edge weights for the read multimapping
     '''
 
-    nx_graph_outfile, egde_weights_outfile = outfiles
+    egde_weights_outfile, nx_graph_outfile = outfiles
 
-    job_options = PARAMS['cluster_options'] + " -t 0:20:00"
+    job_options = PARAMS['cluster_options'] + " -t 1:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.getGraph(infile, nx_graph_outfile, egde_weights_outfile,
@@ -406,10 +406,10 @@ def plotMultimappingHeatmaps(infile, outfiles):
     job_condaenv=PARAMS['conda_base_env']
 
     for outfile in outfiles:
-        level = os.path.basname(outfile.split('_')[1].split('.')[0])
+        level = os.path.basename(outfile).split('_')[-1].split('.')[0]
 
-        CompareTrnaSeq.getGraph(infile, outfile, level,
-                                submit=True, job_options=job_options)
+        CompareTrnaSeq.plot_heatmap(infile[0], infile[1], outfile, level,
+                                    submit=True, job_options=job_options)
 
 
 

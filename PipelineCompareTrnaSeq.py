@@ -28,10 +28,8 @@ import matplotlib.patches as patches
 from matplotlib.colors import LinearSegmentedColormap
 
 
-inreads = pysam.Samfile(filtered_samfile, 'r')
-
 @cluster_runnable
-def getGraph(bamfile, nx_graph_outfile, egde_weights_outfile):
+def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile):
     '''
     bamfile = BAM with all top scoring alignments for each read, sorted in read order. Can
     be obtained by e.g using -a with bowtie2 and then using simulatetrna.bam.filtersam()
@@ -49,17 +47,18 @@ def getGraph(bamfile, nx_graph_outfile, egde_weights_outfile):
 
     # Calculate the edge weights
     node_counts = node_counts = {
-        'gid':collections.Counter(),
-        'tid':collections.Counter(),
-        'ac':collections.Counter(),
-        'aa':collections.Counter()}
+        'gid':Counter(),
+        'tid':Counter(),
+        'ac':Counter(),
+        'aa':Counter()}
 
     edge_weights = {
-        'gid':collections.Counter(),
-        'tid':collections.Counter(),
-        'ac':collections.Counter(),
-        'aa':collections.Counter()}
+        'gid':Counter(),
+        'tid':Counter(),
+        'ac':Counter(),
+        'aa':Counter()}
 
+    inreads = pysam.Samfile(bamfile, 'r')
 
     # Iterate over alignments
     for alignments in bam.iterate_reads(inreads, allow_multimapping=True, remove_trx=True, remove_mt=True):
@@ -120,11 +119,11 @@ def custom_cmap():
 
 
 @cluster_runnable
-def plot_heatmap(edge_weights,
+def plot_heatmap(edge_weights_infile,
+                 nxGraph_infile,
                  output_filename,
-                 level='ac'
+                 level='ac',
                  dividing_lines=True,
-                 include_single = False,
                  cmap_col=custom_cmap()):
 
     '''
@@ -135,18 +134,13 @@ def plot_heatmap(edge_weights,
     level = multimapping level to plot (aa=aminoacid, ac=anticodon, tid=transcriptID, gid=genomeLocusID)
     '''
 
+    edge_weights = pickle.load(open(edge_weights_infile, 'rb'))
+    G = pickle.load(open(nxGraph_infile, 'rb'))
+
     allowed_levels = ['aa', 'ac', 'gid', 'tid'] 
 
     if level not in allowed_levels:
-        raise ValueError('level must be one of %' % ', '.join(allowed_levels))
-
-    if include_single == False:
-        # Remove singleton nodes
-        singleton_nodes = [node for node, degree in G[level].degree() if degree == 0]
-        G[level].remove_nodes_from(singleton_nodes)
-
-    else:
-        pass
+        raise ValueError('level must be one of %s' % ', '.join(allowed_levels))
 
     # Get the list of nodes and their order in alphabetical order
     nodes = sorted(list(G[level].nodes()))
@@ -159,7 +153,7 @@ def plot_heatmap(edge_weights,
     for edge in G[level].edges():
         node1 = nodes.index(edge[0])
         node2 = nodes.index(edge[1])
-        recalc_edge_weight = recalculated_weights[level].get(frozenset(edge), 0)
+        recalc_edge_weight = edge_weights[level].get(frozenset(edge), 0)
         edge_matrix[node1, node2] = np.log1p(recalc_edge_weight)  # Apply logarithmic transformation
         edge_matrix[node2, node1] = np.log1p(recalc_edge_weight)  # Also set the value for the symmetric edge
 
