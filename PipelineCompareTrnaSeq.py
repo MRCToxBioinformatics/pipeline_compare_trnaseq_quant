@@ -29,7 +29,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 
 @cluster_runnable
-def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile):
+def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table_outfile):
     '''
     bamfile = BAM with all top scoring alignments for each read, sorted in read order. Can
     be obtained by e.g using -a with bowtie2 and then using simulatetrna.bam.filtersam()
@@ -100,7 +100,7 @@ def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile):
                 
     # recalculate the weights using the node counts. Weights are now bounded 0-1
     recalculated_weights = {}
-    for level in alignments_reference.keys():
+    for level in edge_weights.keys():
         recalculated_weights[level] = {}
         for edge, weight in edge_weights[level].items():
             node1, node2 = edge
@@ -110,6 +110,20 @@ def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile):
 
     pickle.dump(recalculated_weights, open(edge_weights_outfile, 'wb'))
     pickle.dump(G, open(nx_graph_outfile, 'wb'))
+    
+    with open(edge_weights_table_outfile, 'w') as outf:
+        outf.write('bam\tlevel\tnode1\tnode2\tnode1_count\tnode2_count\tedge_weight\tedge_reweighted\n')
+        for level in edge_weights.keys():
+            for edge, weight in edge_weights[level].items():
+                node1, node2 = edge
+                outf.write('\t'.join(map(str, (bamfile,
+                                               level,
+                                               node1,
+                                               node2,
+                                               node_counts[level][node1],
+                                               node_counts[level][node2],
+                                               weight,
+                                               recalculated_weights[level][edge]))) + '\n')
 
 
 def custom_cmap():

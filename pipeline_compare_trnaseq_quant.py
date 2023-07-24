@@ -380,19 +380,29 @@ def alignWithBowtie2Multimapping(infiles, outfile):
 
 @transform(alignWithBowtie2Multimapping,
            suffix('_bowtie2ReportAll.bam'),
-           ['.mm_edge_weights.pickle', '.mm_nxgraph.pickle'])
+           ['.mm_edge_weights.pickle', '.mm_nxgraph.pickle', '.mm_edge_weights.tsv'])
 def getMultimappingGraph(infile, outfiles):
     '''
     Use CompareTrnaSeq.getGraph to get the graph and edge weights for the read multimapping
     '''
 
-    egde_weights_outfile, nx_graph_outfile = outfiles
+    egde_weights_outfile, nx_graph_outfile, edge_weights_table_outfile = outfiles
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
-    CompareTrnaSeq.getGraph(infile, nx_graph_outfile, egde_weights_outfile,
+    CompareTrnaSeq.getGraph(infile, nx_graph_outfile,
+                            egde_weights_outfile, edge_weights_table_outfile,
                             submit=True, job_options=job_options)
+
+
+@merge(getMultimappingGraph,
+       'multimapping.dir/all.mm.tsv')
+def combineMultimappingTallies(infiles, outfile):
+    
+    infiles = ' '.join([x[2] for x in infiles])
+    statement = 'cat %(infiles)s > %(outfile)s' % locals()
+    P.run(statement)
 
 
 @transform(getMultimappingGraph,
