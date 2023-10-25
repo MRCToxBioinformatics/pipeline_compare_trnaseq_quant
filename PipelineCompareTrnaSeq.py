@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from collections import Counter, defaultdict
-from itertools import combinations
+from itertools import permutations
 
 import re
 import os
@@ -88,7 +88,7 @@ def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table
             else:
                 # Multiple alignments, add each read to each edge for all pairs of nodes
 
-                for ref1, ref2 in combinations(alignments, 2):
+                for ref1, ref2 in permutations(alignments, 2):
 
                     edge_key = frozenset((ref1, ref2))
 
@@ -169,7 +169,6 @@ def plot_heatmap(edge_weights_infile,
         node2 = nodes.index(edge[1])
         recalc_edge_weight = edge_weights[level].get(frozenset(edge), 0)
         edge_matrix[node1, node2] = np.log1p(recalc_edge_weight)  # Apply logarithmic transformation
-        edge_matrix[node2, node1] = np.log1p(recalc_edge_weight)  # Also set the value for the symmetric edge
 
     # Get the list of amino acid labels from the nodes
     amino_acids = [node.split('-')[1] for node in nodes]
