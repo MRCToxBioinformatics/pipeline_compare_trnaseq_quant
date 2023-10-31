@@ -1,0 +1,7 @@
+run_accession	experiment_accession	sample_accession	tax_id	experiment_title	fastq_ftp
+SRR10587157	SRX7267140	SAMN13477582	10090	NextSeq 550 sequencing: GSM4202819: Cortex_tRNA_1 Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR105/057/SRR10587157/SRR10587157.fastq.gz
+SRR10587158	SRX7267141	SAMN13477581	10090	NextSeq 550 sequencing: GSM4202820: Cortex_tRNA_2 Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR105/058/SRR10587158/SRR10587158.fastq.gz
+SRR10587159	SRX7267142	SAMN13477580	10090	NextSeq 550 sequencing: GSM4202821: Cortex_tRNA_3 Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR105/059/SRR10587159/SRR10587159.fastq.gz
+SRR10587154	SRX7267137	SAMN13477585	10090	NextSeq 550 sequencing: GSM4202816: Cerebellum_tRNA_1 Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR105/054/SRR10587154/SRR10587154.fastq.gz
+SRR10587155	SRX7267138	SAMN13477584	10090	NextSeq 550 sequencing: GSM4202817: Cerebellum_tRNA_2 Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR105/055/SRR10587155/SRR10587155.fastq.gz
+SRR10587156	SRX7267139	SAMN13477583	10090	NextSeq 550 sequencing: GSM4202818: Cerebellum_tRNA_3 Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR105/056/SRR10587156/SRR10587156.fastq.gz

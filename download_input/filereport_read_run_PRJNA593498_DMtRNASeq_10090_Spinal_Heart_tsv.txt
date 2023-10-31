@@ -1,0 +1,5 @@
+run_accession	experiment_accession	sample_accession	tax_id	experiment_title	fastq_ftp
+SRR11729757	SRX8288956	SAMN14850336	10090	NextSeq 550 sequencing: GSM4522993: Heart_tRNA_2_DM Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/057/SRR11729757/SRR11729757.fastq.gz
+SRR11729761	SRX8288960	SAMN14850332	10090	NextSeq 550 sequencing: GSM4522997: Spinal_cord_tRNA_2_DM Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/061/SRR11729761/SRR11729761.fastq.gz
+SRR11729756	SRX8288955	SAMN14850337	10090	NextSeq 550 sequencing: GSM4522992: Heart_tRNA_1_DM Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/056/SRR11729756/SRR11729756.fastq.gz
+SRR11729760	SRX8288959	SAMN14850333	10090	NextSeq 550 sequencing: GSM4522996: Spinal_cord_tRNA_1_DM Mus musculus OTHER	ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/060/SRR11729760/SRR11729760.fastq.gz
