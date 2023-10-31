@@ -1,0 +1,11 @@
+Files downloaded on 23 January 2023
+
+MODOMICS sequences:
+
+sequences_hs.json - https://www.genesilico.pl/modomics/api/sequences?RNAtype=tRNA&organism=Homo+sapiens&format=json
+
+sequences_hs.json - https://www.genesilico.pl/modomics/api/sequences?RNAtype=tRNA&organism=Homo+sapiens&format=json
+
+MODOMICS modification details:
+
+index.csv - Downloaded from https://genesilico.pl/modomics/modifications in CSV format

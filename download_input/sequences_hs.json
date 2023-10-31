@@ -1,0 +1,452 @@
+{
+    "375": {
+        "anticodon": "IGC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens1",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGGGGAUUALCUCAAADGGDAGAGCRCUCGCJUIGCOP#CGAGAG7UAGCGGGAPCG\"UGCCCGCAUCCUCCACCA",
+        "subtype": "Ala",
+        "type": "tRNA"
+    },
+    "376": {
+        "anticodon": "IGC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens2",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGGGAAUUALCUCAAADGGDAGAGCRCUCGCJUIGCOP#CGAGAG7UAGCGGGAPCG\"UGCCCGCAUUCUCCACCA",
+        "subtype": "Ala",
+        "type": "tRNA"
+    },
+    "397": {
+        "anticodon": "CUC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens3",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "UCCCUGGUGLUCPAGUGGDPAGGAUUCGGCGCUCUCACCGCCGCGGC??GGG\\PCGAUUCCCGGUCAGGGAACCA",
+        "subtype": "Glu",
+        "type": "tRNA"
+    },
+    "423": {
+        "anticodon": "#AA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens4",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCCGAAAUALCUC\"GDDGGGAGAGCRPPAGABU#AAWAPCUAAAG7DC?CUGGTPCG\"UCCCGGGUUUCGGCACCA",
+        "subtype": "Phe",
+        "type": "tRNA"
+    },
+    "441": {
+        "anticodon": "CCC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens5",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCGBCLCUGGUGPAGUGGDAUCAUGCAAGAJUCCCAUZCUUGCGAC??GGGTPCG\"UUCCCGGGCGGCGCACCA",
+        "subtype": "Gly",
+        "type": "tRNA"
+    },
+    "442": {
+        "anticodon": "GCC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens6",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCAJULGUGGUUCAGUGGDAGAAUUCUCGCCUGCCA?GCGGGAGG???GGGTPCG\"UUCCCGGCCAAUGCACCA",
+        "subtype": "Gly",
+        "type": "tRNA"
+    },
+    "449": {
+        "anticodon": "GUG",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens7",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": ";GCCGUGAUCGUAPAGDGGDDAGUACUCUGCGPUGUGGCCGCAGCAA??UCGGUPCG\"AUCCGAGUCACGGCACCA",
+        "subtype": "His",
+        "type": "tRNA"
+    },
+    "505": {
+        "anticodon": ".AA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens8",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUCAGLAUGLCMGAGUGGDCPAAGGCRCCAGACU..AKKPPUGGJJPPCGGAUGGAG??UGGGTTPG\"\"UCCCACUUCUGACACCA",
+        "subtype": "Leu",
+        "type": "tRNA"
+    },
+    "514": {
+        "anticodon": "BAU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens9",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCCUCLUUALCGCAGDAGGDAGCGCRPCAGPCUBAU6APCUGAAG7D?GUGAGTPCG\"UCCUCACACGGGGCACCA",
+        "subtype": "Met",
+        "type": "tRNA"
+    },
+    "525": {
+        "anticodon": "QUU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens10",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUCUCUGUKLCGCAADCGGDXAGCGCRPPCGGCUQUU6ACCGAAAG7DUGGUGG.PCG\"GCCCACCCAGGGACGCCA",
+        "subtype": "Asn",
+        "type": "tRNA"
+    },
+    "552": {
+        "anticodon": "NUG",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens11",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGCCCCAUKGUGPAAU#GDDAGCACUCPGGABUNUGAAPCCAGCGAU??GAGPPCA\"AUCUCGGUGGGACCUCCA",
+        "subtype": "Gln",
+        "type": "tRNA"
+    },
+    "553": {
+        "anticodon": "NUG",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens12",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGUCCCAUKGUGPAAU#GDDAGCACUCPGGABUNUGAAPCCAGCGAU??GAGPPCA\"AUCUCGGUGGGACCUCCA",
+        "subtype": "Gln",
+        "type": "tRNA"
+    },
+    "591": {
+        "anticodon": "UGA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens13",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUAGUCGUGGCMGAGD#GDDAAGGCGAPGGACUUGAAAPCCAUJGGGGU'UCCCCG?GCAGGTPCG\"AUCCUGCCGACUACGCCA",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "614": {
+        "anticodon": ".AC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens14",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUUUCCGUAGUGPAGDGGDDAUCACLPUCGCCU.ACACGCGAAAG7D??CCGGUPCG\"AACCGGGCGGAAACACCA",
+        "subtype": "Val",
+        "type": "tRNA"
+    },
+    "650": {
+        "anticodon": "CAU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens15",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "AGCAGAGUKLCGCAGCGGAAGCGULCUGGGCCCAU6ACCCAGAG7D?GAUGGAUCG\"AACCAUCCUCUGCUACCA",
+        "subtype": "Ini",
+        "type": "tRNA"
+    },
+    "664": {
+        "anticodon": "9PA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens16",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "CCUUCLAUALCUCAGDDGGXAGAGCRRAGGACU9PAKA]CCUUAG7D?GCUGGTPCG\"UUCCGGCUCGAAGGACCA",
+        "subtype": "Tyr",
+        "type": "tRNA"
+    },
+    "665": {
+        "anticodon": "9PA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens17",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "CCUUCLAUALCUCAGCDGGXAGAGCRRAGGACU9PAKA]CCUUAG7D?GCUGGTPCG\"UUCCGGCUCGAAGGACCA",
+        "subtype": "Tyr",
+        "type": "tRNA"
+    },
+    "668": {
+        "anticodon": "NCA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens18",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCCCGGAUGAUCCUCAGUGGUCUGGGGUGCAGGCUNCA+ACCUGUAGCUGUCUAGCGACAGAGUGGUPCA\"UUCCACCUUUCGGGCGCCA",
+        "subtype": "Sec",
+        "type": "tRNA"
+    },
+    "750": {
+        "anticodon": "GAU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens19",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "AGAAAUAUKUCUGAUAAAAGARPPACUUUGAU6GAGUAAAUAAUAGGAGCUUAAACCCCCUUAUUUCUACCA",
+        "subtype": "Ile",
+        "type": "tRNA"
+    },
+    "781": {
+        "anticodon": "\u00caAA",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens20",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "GUUAAGAUKLCAGAGCCCGGDAAUCGCAPAAAACU\u00caAAAACUUUACAGU?AGAGGTPCA\"UUCCUCUUCUUAACACCA",
+        "subtype": "Leu",
+        "type": "tRNA"
+    },
+    "814": {
+        "anticodon": "GCU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens21",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "GAGAAAGCUCACAAGAACUGCU6ACUCAUGCCCCCAUGUCUA\"CAACAUGGCUUUCUCACCA",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "885": {
+        "anticodon": "\u2203UU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens22",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "CACUGUAA\"LCUAACUUAGCAPPAACCU\u2203UU6AGUUAAAGAUUAAGAGAACCAACACCUCUUUACAGUGACCA",
+        "subtype": "Lys",
+        "type": "tRNA"
+    },
+    "886": {
+        "anticodon": "UGG",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens23",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "CAGAGAAU\"GUUUAAAUUAGAAUCPPAGCPUUGGKPGCUAAUGGUGGAGTPAAAGACUUUUUCUCUGACCA",
+        "subtype": "Pro",
+        "type": "tRNA"
+    },
+    "887": {
+        "anticodon": "QUC",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens24",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "AAGGUAUU\"LAAAAACCAUUUCAPAACUUUQUCAAAGUUAAAUUAUAGGCUAAAUCCUAUAUAUCUUACCA",
+        "subtype": "Asp",
+        "type": "tRNA"
+    },
+    "888": {
+        "anticodon": "UAG",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens25",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "ACUUUUAA\"LGAUAACAGCUAUCCAPPGGPCUUAGKCCCCAAAAAUUUUGGUGCAACUCCAAAUAAAAGUACCA",
+        "subtype": "Leu",
+        "type": "tRNA"
+    },
+    "889": {
+        "anticodon": "<AU",
+        "genebank": "",
+        "mintbase": "https://cm.jefferson.edu/MINTbase/InputController?g=GRCh37&modomics=homosapiens26",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "AGUAAGGUCAGCUAAAUAAGCUAPCGGGCC>AUACCCCGAAAAUGPUGGUUAUACCCUUCCCGUACUACCA",
+        "subtype": "Met",
+        "type": "tRNA"
+    },
+    "993": {
+        "anticodon": "CAU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "mitochondrion",
+        "organism": "Homo sapiens",
+        "seq": "AGUAAGGUCAGCUAA\"UAAGCUAPCGGGCCCAUACCCCGAAAAUGPUGGUUAUACCCUUCCCGUACUACCA",
+        "subtype": "Met",
+        "type": "tRNA"
+    },
+    "994": {
+        "anticodon": "CAG",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUCAGGAUGGCCGAGCGGUCUAAGGCGCUGCGUUCAGGUCGCAGUC'CCCCUGGAGGCGUGGGUUCGAAUCCCACUCCUGACA",
+        "subtype": "Leu",
+        "type": "tRNA"
+    },
+    "995": {
+        "anticodon": "CAG",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUCAGGAUGGCCGAGCGGUCUAAGGCGCUGCGUUCAGGUCGCAGUC'CCCCUGGAGGCGUGGGUUCGAAUCCCACUUCUGACA",
+        "subtype": "Leu",
+        "type": "tRNA"
+    },
+    "996": {
+        "anticodon": "CAU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCCCUCUUAGCGCAGUGGG'AGCGCGUCAGUCUCAUAAUCUGAAGGUCCUGAGUUCGAGCCUCAGAGAGGGCA",
+        "subtype": "Met",
+        "type": "tRNA"
+    },
+    "997": {
+        "anticodon": "CAA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUCAGGAUGGCCGAGUGGUCUAAGGCGCCAGAC?CAAGUUCUGGUCUCCAAUGGAGGCGUGGGUUCGAAUCCCACUUCUGACA",
+        "subtype": "Leu",
+        "type": "tRNA"
+    },
+    "998": {
+        "anticodon": "CCU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCCCCAGUGGCCUAAUGGAUAAGGCACUGGC'UCCUAAGCCAGGGAUUGUGGGUUCGAGUCCCACCUGGGGUA",
+        "subtype": "Arg",
+        "type": "tRNA"
+    },
+    "999": {
+        "anticodon": "UCU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGCUCCGUGGCGCAAUGGAUAGCGCAUUGGA'UUCUAAUUCAAAGGUUCCGGGUUCGAGUCCCGGCGGAGUCG",
+        "subtype": "Arg",
+        "type": "tRNA"
+    },
+    "1000": {
+        "anticodon": "AGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUAGUCGUGGCCGAGUGGUUAAGGCGAUGGA'UAGAAAUCCAUUGG'GUUUCCCCGCGCAGGUUCGAAUCCUGCCGACUACG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1001": {
+        "anticodon": "CGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCUGUGAUGGCCGAGUGGUUAAGGCGUUGGA'UCGAAAUCCAAUGG'GUCUCCCCGCGCAGGUUCGAAUCCUGCUCACAGCG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1002": {
+        "anticodon": "UGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCAGCGAUGGCCGAGUGGUUAAGGCGUUGGA'UUGAAAUCCAAUGG'GUCUCCCCGCGCAGGUUCGAACCCUGCUCGCUGCG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1003": {
+        "anticodon": "GCU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GACGAGGUGGCCGAGUGGUUAAGGCGAUGGACUGCUEAUCCAUUGU'CUCUGCACGCGUGGGUUCGAAUCCCACCCUCGUCG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1004": {
+        "anticodon": "AGU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGCGCCGUGGCUUAGUUGGUUAAAGCGCCUG'CUAGUAAACAGGAGAUCCUGGGUUCGAAUCCCAGCGGUGCCU",
+        "subtype": "Thr",
+        "type": "tRNA"
+    },
+    "1005": {
+        "anticodon": "CGU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGCUCUAUGGCUUAGUUGGUUAAAGCGCCUGUCUCGUAAACAGGAGAUCCUGGGUUCGACUCCCAGUGGGGCCU",
+        "subtype": "Thr",
+        "type": "tRNA"
+    },
+    "1006": {
+        "anticodon": "UGU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GGCUCUAUGGCUUAGUUGGUUAAAGCGCCUG'CUUGUAAACAGGAGAUCCUGGGUUCGAAUCCCAGUAGAGCCU",
+        "subtype": "Thr",
+        "type": "tRNA"
+    },
+    "1007": {
+        "anticodon": "AGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUAGUCGUGGCCGAGUGGUUAAGGCGAUGGACUAGAAAUCCAUUGGGGUUUCCCCGCGCAGGUUCGAAUCCUGCCGACUACG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1008": {
+        "anticodon": "AGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GUAGUCGUGGCCGAGUGGUUAAGGCGAUGGA'UAGAAAUCCAUUGG'GUUUCCCCGCGCAGGUUCGAAUCCUGCCGACUACG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1009": {
+        "anticodon": "CGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCUGUGAUGGCCGAGUGGUUAAGGCGUUGGA'UCGAAAUCCAAUGG'GUCUCCCCGCGCAGGUUCGAAUCCUGCUCACAGCG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1010": {
+        "anticodon": "UGA",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GCAGCGAUGGCCGAGUGGUUAAGGCGUUGGA'UUGAAAUCCAAUGG'GUCUCCCCGCGCAGGUUCGAACCCUGCUCGCUGCG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    },
+    "1011": {
+        "anticodon": "GCU",
+        "genebank": "",
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Homo sapiens",
+        "seq": "GACGAGGUGGCCGAGUGGUUAAGGCGAUGGACUGCUEAUCCAUUGU'CUCUGCACGCGUGGGUUCGAAUCCCACCCUCGUCG",
+        "subtype": "Ser",
+        "type": "tRNA"
+    }
+}

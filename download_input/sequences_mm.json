@@ -1,0 +1,152 @@
+{
+    "396": {
+        "anticodon": "CUC",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "UCCCUGGUGLUCPAGUGGDPAGGAUUCGGCGCUCUCACCGCCGCGGC??GGG\\PCGAUUCCCGGUCAGGGAACCA",
+        "subtype": "Glu",
+        "type": "tRNA"
+    },
+    "419": {
+        "anticodon": "#AA",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "AGCCGAAAUALCUC\"GDDGGGAGAGCRPPAGABU#AAKAPCUAAAG7UC?CUGGTPCG\"UCCCGGGUUUCGGCACCA",
+        "subtype": "Phe",
+        "type": "tRNA"
+    },
+    "420": {
+        "anticodon": "#AA",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GCCGAAAUALCUC\"GDDGGGAGAGCRPPAGABU#AAYAPCUAAAG7UC?CUGGTPCG\"UCCCGGGUUUCGGCACCA",
+        "subtype": "Phe",
+        "type": "tRNA"
+    },
+    "421": {
+        "anticodon": "#AA",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GCCGAAAUALCUC\"GDDGGGAGAGCRPPAGABU#AAYAPCUAAAG7UC?CUGGTPCG\"UCCCGGGUUUCGGCACCA",
+        "subtype": "Phe",
+        "type": "tRNA"
+    },
+    "458": {
+        "anticodon": "IAU",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GGCCGGUUALCUCAGDDGGDDAGAGCRPGGPGCUIAU6ACGCCAAG7D?GCGGGTPCG\"UCCCCGUACGGGCCACCA",
+        "subtype": "Ile",
+        "type": "tRNA"
+    },
+    "474": {
+        "anticodon": "CUU",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GCCCGGCUALCUCAGDCGGUAGAGCAPGAGACUCUUHAPCUCAGG7D?GUGGG\\PCG\"GCCCCACGUUGGGCGCCA",
+        "subtype": "Lys",
+        "type": "tRNA"
+    },
+    "475": {
+        "anticodon": "CUN",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GCCCGLCUALCUCAGDCGGDAGAGCAPGGGACUCUN6APCCCAGG7D?GUGGG\\PCG\"GCCCCACGUUGGGCGCCA",
+        "subtype": "Lys",
+        "type": "tRNA"
+    },
+    "513": {
+        "anticodon": "BAU",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GCCUCLUUALCGCAGDAGGDAGCGCRPCAGPCUBAU6APCUGAAG7D?GUGAGTPCG\"UCCUCACACGGGGCACCA",
+        "subtype": "Met",
+        "type": "tRNA"
+    },
+    "550": {
+        "anticodon": "CUG",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GGUUCCAUKGUGPAAD#GDDAGCACUCPGGABUCUGAAPCCAGCGAU??GAGPPCA\"AUCUCGGUGGAACCUCCA",
+        "subtype": "Gln",
+        "type": "tRNA"
+    },
+    "551": {
+        "anticodon": "JUG",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GGUCCCAUKGUGPAAD#GDDAGCACUCPGGABUJUGAAPCCAGCGAU??GAGPPCA\"AUCUCGGUGGGACCUCCA",
+        "subtype": "Gln",
+        "type": "tRNA"
+    },
+    "564": {
+        "anticodon": "ICG",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GGGCCAGUKLCGCAADGGADAACGCRPCUGABUICGKAPCAGAAGADU?PAGGPPCG\"CUCCUGGCUGGCUCGCCA",
+        "subtype": "Arg",
+        "type": "tRNA"
+    },
+    "565": {
+        "anticodon": "ICG",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GGGCCAGUKLCGCAADGGADAACGCRPCUGABUICGKAPCAGAAGADU?PAGGPPCG\"CUCCUGGCUGGCUCGCCA",
+        "subtype": "Arg",
+        "type": "tRNA"
+    },
+    "613": {
+        "anticodon": "IAC",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GUUUCCGUAGUGPAGDGGDDAUCACLPUCGCBUIACA?GCGAAAG7D??CCGGUPCG\"AACCGGGCGGAAACACCA",
+        "subtype": "Val",
+        "type": "tRNA"
+    },
+    "647": {
+        "anticodon": "CAU",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "AGCAGAGUKLCGCAGCGGAAGCGULCUGGGCCCAU6ACCCAGAG7D?GAUGGAUCG\"AACCAUCCUCUGCUACCA",
+        "subtype": "Ini",
+        "type": "tRNA"
+    },
+    "667": {
+        "anticodon": "NCA",
+        "genebank": null,
+        "mintbase": "",
+        "organellum": "eukaryotic cytosol ",
+        "organism": "Mus musculus",
+        "seq": "GCCCGGAUGAUCCUCAGUGGUCUGGGGUGCAGGCUNCA+ACCUGUAGCUGUUUAGCGACAGAGUGGUPCA\"UUCCACCUUUCGGGCGCCA",
+        "subtype": "Sec",
+        "type": "tRNA"
+    }
+}
