@@ -30,7 +30,7 @@ for further CGAT-core installation options if needed.
 
 See https://github.com/mamba-org/mamba for instructions on how to install mamba.
 Can alternatively only use conda, but mamba is quicker for installation. Even with mamba,
-you may find the final command takes a few minutes to complete
+you may find the following steps take a few minutes.
 
 1. Create a new conda environment with the required packages
 	```bash
