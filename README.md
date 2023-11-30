@@ -3,13 +3,11 @@
 
 This pipeline was used for the manuscript: *Benchmarking tRNA-Seq quantification approaches by realistic tRNA-Seq data simulation*. Smith, T., et al.
 
-The pipeline was build using CGAT-Core
+The pipeline was build using CGAT-Core. CGAT-core is a workflow management system to build scalable data analysis pipelines. CGAT-core includes libraries and helper functions to enable researchers to quickly design and build computational workflows for the analysis of large-scale data-analysis.
 
 <a href="https://github.com/cgat-developers/cgat-core">
-  <img src="https://github.com/cgat-developers/cgat-core/blob/master/docs/img/CGAT_logo.png" alt="CGAT-core" width="200">
+  <img src="https://github.com/cgat-developers/cgat-core/blob/master/docs/img/CGAT_logo.png" alt="CGAT-core" width="100">
 </a>
-
-CGAT-core is a workflow management system to build scalable data analysis pipelines. CGAT-core includes libraries and helper functions to enable researchers to quickly design and build computational workflows for the analysis of large-scale data-analysis.
 
 [CGAT-core Documentation](https://cgat-core.readthedocs.io/en/latest/ "CGAT-core read the docs")
 
@@ -34,12 +32,14 @@ See https://github.com/mamba-org/mamba for instructions on how to install mamba.
 Can alternatively only use conda, but mamba is quicker for installation. Even with mamba,
 you may find the final command takes a few minutes to complete
 
-Create a new conda environment and activate it, then install the required packages
-```bash
-mamba create --name trna -f <PATH TO THIS REPOSITORY/conda_envs/trna.environment.yml>
-```
+1. Create a new conda environment with the required packages
+	```bash
+	mamba create --name trna -f <PATH TO THIS REPOSITORY/conda_envs/trna.environment.yml>
+	```
 
+2. Create a separate dedicated environment for `mimseq`, called 'mimseq', following the instructions [here](https://github.com/nedialkova-lab/mim-tRNAseq).
 
+3. Activate the trna environment: `conda activate trna`
 
 ## Prepare the pipeline direcory
 
