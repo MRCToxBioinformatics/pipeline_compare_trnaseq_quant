@@ -29,7 +29,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 
 @cluster_runnable
-def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table_outfile):
+def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table_outfile, multimapping_tally_outfile):
     '''
     bamfile = BAM with all top scoring alignments for each read, sorted in read order. Can
     be obtained by e.g using -a with bowtie2 and then using simulatetrna.bam.filtersam()
@@ -38,6 +38,12 @@ def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table
 
     edge_weights_outfile = where to save the dictionary of weighted edges
     '''
+
+    # Dictionary to hold the frequencies for multimapping/single mapping
+    mapping = {'gid': {'multi':0, 'single':0},
+               'tid': {'multi':0, 'single':0},
+               'ac': {'multi':0, 'single':0},
+               'aa': {'multi':0, 'single':0}}
 
     # Create dictionaries to hold the nx.Graphs and node and egde counts
     G = {'gid':nx.Graph(),
@@ -76,18 +82,17 @@ def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table
             alignments = alignments_reference[level]
         
             if len(alignments) == 1:
+                mapping[level]['single']+=1
                 # Single alignment, add the read to the corresponding node
                 # read = next(iter(alignments))
-
                 node = list(alignments)[0]
-
+               
                 node_counts[level][node] += 1
-
                 G[level].add_node(node)
 
             else:
+                mapping[level]['multi']+=1                
                 # Multiple alignments, add each read to each edge for all pairs of nodes
-
                 for ref1, ref2 in permutations(alignments, 2):
 
                     edge_key = frozenset((ref1, ref2))
@@ -125,6 +130,11 @@ def getGraph(bamfile, nx_graph_outfile, edge_weights_outfile, edge_weights_table
                                                weight,
                                                recalculated_weights[level][edge]))) + '\n')
 
+
+    with open(multimapping_tally_outfile, 'w') as outf:
+        for level in mapping.keys():
+            for mapping_type in mapping[level].keys():
+                outf.write('\t'.join([bamfile, level, mapping_type, str(mapping[level][mapping_type])]) + '\n')
 
 def custom_cmap():
     # Create a custom colormap that transitions from white (0.0) to blue (1.0)
@@ -661,6 +671,7 @@ def readMimSeqQuant(infile, drop_cols, melt_cols):
     mimseq_quant['tally_method']='mimseq'
     return(mimseq_quant)
 
+
 @cluster_runnable
 def compareMimSeq(infile, truths, isodecoder_out, anticodon_out):
     '''
@@ -873,7 +884,7 @@ def getTruth2Assignment(infile, outfile, isodecoder_mapping=None):
             for k2, c in v.items():
                 outf.write('\t'.join(map(str, (k, k2, c))) + '\n')
 
-    t2a_df = t2a_df = pd.read_csv(outfile, sep='\t')
+    t2a_df = pd.read_csv(outfile, sep='\t')
     t2a_df['truth_anticodon'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in t2a_df['truth']]
     t2a_df['assignment_anticodon'] = [re.sub('\d$', '', '-'.join(x.split('-')[0:3]).replace('tRX', 'tRNA')) for x in t2a_df['assignment']]
 
@@ -889,7 +900,9 @@ def getTruth2Assignment(infile, outfile, isodecoder_mapping=None):
     if isodecoder_mapping is not None:
         # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
         trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
+        print(trna2mimseqcluster.head())
         trna2isodecoder = defaultdict(str, {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])})
+        print(trna2isodecoder)
 
         with open(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), 'w') as outf:
             for x,y in trna2isodecoder.items():
@@ -897,6 +910,8 @@ def getTruth2Assignment(infile, outfile, isodecoder_mapping=None):
 
         t2a_df_isodecoder['truth_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['truth_isodecoder']]
         t2a_df_isodecoder['assignment_isodecoder'] = [trna2isodecoder[x] for x in t2a_df_isodecoder['assignment_isodecoder']]
+
+        print(t2a_df_isodecoder)
 
         t2a_df_mimseq_isodecoder = t2a_df_isodecoder.groupby(['truth_isodecoder', 'assignment_isodecoder']).agg({'count':'sum'}).reset_index()
         t2a_df_mimseq_isodecoder.to_csv(re.sub('.tsv$', '_mimseq_isodecoder.tsv', outfile), sep='\t', index=False)
@@ -942,6 +957,7 @@ def getTruth2AssignmentMimSeq(infile, mimseq_isodecoder_counts, isodecoder_mappi
     parent2isodecoder = {p:i for i,p in zip(mimseq_isodecoder_table['isodecoder'], mimseq_isodecoder_table['parent'])}
 
     # read in the mimseq isodecoder mapping file to map from each tRNA to the mimseq isodecoder
+    print(isodecoder_mapping)
     trna2mimseqcluster = pd.read_csv(isodecoder_mapping, sep='\t', header=None, names=['trna', 'mimseq_cluster'])
     trna2isodecoder = defaultdict(str, {t:i for t,i in zip(trna2mimseqcluster['trna'], trna2mimseqcluster['mimseq_cluster'])})
 

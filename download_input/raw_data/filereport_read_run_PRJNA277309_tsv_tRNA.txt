@@ -1,0 +1,3 @@
+study_accession	sample_accession	experiment_accession	run_accession	tax_id	scientific_name	fastq_ftp	submitted_ftp	sra_ftp	sample_title	bam_ftp
+PRJNA277309	SAMN03389310	SRX900779	SRR1836125	9606	Homo sapiens	ftp.sra.ebi.ac.uk/vol1/fastq/SRR183/005/SRR1836125/SRR1836125.fastq.gz		ftp.sra.ebi.ac.uk/vol1/srr/SRR183/005/SRR1836125	tRNA treated 1	
+PRJNA277309	SAMN03389307	SRX900780	SRR1836126	9606	Homo sapiens	ftp.sra.ebi.ac.uk/vol1/fastq/SRR183/006/SRR1836126/SRR1836126.fastq.gz		ftp.sra.ebi.ac.uk/vol1/srr/SRR183/006/SRR1836126	tRNA treated 2	

@@ -1,3 +1,0 @@
-1. Download files with 10090 tax id, not 'DM' suffix (DM-tRNA-seq) and from Cortex or Cerebellum from https://www.ebi.ac.uk/ena/browser/view/PRJNA593498?show=reads
-2. unzip ena_files.unzip
-3. python rename.py

@@ -1,3 +1,4 @@
 1. Download files from https://www.ebi.ac.uk/ena/browser/view/PRJNA360886?show=reads
 2. unzip
-3. python rename.py
+3. python rename_YAMATseq.py
+

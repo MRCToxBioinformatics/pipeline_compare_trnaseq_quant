@@ -1,0 +1,4 @@
+1. Download files from https://www.ebi.ac.uk/ena/browser/view/PRJNA775872?show=reads
+2. unzip
+3. python rename_ALLtRNAseq.py
+4. Concatenate files (lanes?): cat ALLtRNAseq_final_files | while read final_file; do  file1=$(echo $final_file'-l1.fastq.gz'); file2=$(echo $final_file'-l2.fastq.gz'); cat $file1 $file2 > $final_file.fastq.gz; rm -f $file1 $file2; done

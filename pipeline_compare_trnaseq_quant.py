@@ -71,10 +71,6 @@ try:
 except KeyError:
     PARAMS["input"] = "."
 
-print(PARAMS)
-for k,v in PARAMS.items():
-    print(k,v)
-
 # define input files. Here we allow single or paired end
 SEQUENCESUFFIXES = ("*.fastq.1.gz", "*.fastq.gz", "*.fastq")
 
@@ -142,33 +138,6 @@ def buildBowtie2Index(infile, outfile):
 
     P.run(statement)
 
-@transform(mergeNucMtSequences,
-           regex('.*/(\S+).fa'),
-           r'trna_sequences.dir/\1_gsnap_index')
-def buildGSNAPIndex(infile, outfile):
-    'Index the tRNA sequences for GSNAP'
-
-    outdir = os.path.dirname(outfile)
-    outfile_base = os.path.basename(outfile)
-
-    statement = 'gmap_build -q 1 -D %(outdir)s -d %(outfile_base)s %(infile)s' % locals()
-
-    job_condaenv=PARAMS['conda_base_env']
-
-    P.run(statement)
-
-
-@transform(mergeNucMtSequences,
-           regex('.*/(\S+).fa'),
-           r'trna_sequences.dir/\1.fa.idx')
-def buildSegemehlIndex(infile, outfile):
-    'Index the tRNA sequences for Segemehl'
-
-    statement = 'segemehl.x -x %(outfile)s -d %(infile)s' % locals()
-
-    job_condaenv=PARAMS['conda_base_env']
-
-    P.run(statement)
 
 ###################################################
 # Simulation full length no mutations and compare alignment strategies
@@ -380,19 +349,20 @@ def alignWithBowtie2Multimapping(infiles, outfile):
 
 @transform(alignWithBowtie2Multimapping,
            suffix('_bowtie2ReportAll.bam'),
-           ['.mm_edge_weights.pickle', '.mm_nxgraph.pickle', '.mm_edge_weights.tsv'])
+           ['.mm_edge_weights.pickle', '.mm_nxgraph.pickle', '.mm_edge_weights.tsv', '.mm_tallies.tsv'])
 def getMultimappingGraph(infile, outfiles):
     '''
     Use CompareTrnaSeq.getGraph to get the graph and edge weights for the read multimapping
     '''
 
-    egde_weights_outfile, nx_graph_outfile, edge_weights_table_outfile = outfiles
+    egde_weights_outfile, nx_graph_outfile, edge_weights_table_outfile, multimapping_tally_outfile  = outfiles
 
     job_options = PARAMS['cluster_options'] + " -t 1:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.getGraph(infile, nx_graph_outfile,
                             egde_weights_outfile, edge_weights_table_outfile,
+                            multimapping_tally_outfile,
                             submit=True, job_options=job_options)
 
 
@@ -400,7 +370,7 @@ def getMultimappingGraph(infile, outfiles):
        'multimapping.dir/all.mm.tsv')
 def combineMultimappingTallies(infiles, outfile):
     
-    infiles = ' '.join([x[2] for x in infiles])
+    infiles = ' '.join([x[3] for x in infiles])
     statement = 'cat %(infiles)s > %(outfile)s' % locals()
     P.run(statement)
 
@@ -420,8 +390,6 @@ def plotMultimappingHeatmaps(infile, outfiles):
 
         CompareTrnaSeq.plot_heatmap(infile[0], infile[1], outfile, level,
                                     submit=True, job_options=job_options)
-
-
 
 ###################################################
 # Learn mutation and truncation signatures
@@ -496,138 +464,10 @@ def mapWithBowtie2SingleReport(infiles, outfile):
 
 SEQUENCEFILES_REGEX2 = regex(r"(.*\/)*(YAMATseq_BT20_A).(fastq.1.gz|fastq.gz|fastq)")
 
-@mkdir('mut_trunc_sig.dir')
-@transform(SEQUENCEFILES,
-           SEQUENCEFILES_REGEX,
-           add_inputs(buildGSNAPIndex),
-           r"mut_trunc_sig.dir/\2_GSNAPReportSingle.bam")
-def mapWithGSNAPSingleReport(infiles, outfile):
-    '''
-    Map reads to the tRNA sequences, reporting only one alignment per read
-    '''
-    infile, gsnap_index = infiles
 
-    gsnap_index_dir = os.path.dirname(gsnap_index)
-    gsnap_index_base = os.path.basename(gsnap_index)
-
-    tmp_file_sam = P.get_temp_filename()
-    tmp_file_single_sam = P.get_temp_filename()
-
-    statement = '''
-    gsnap
-    --gunzip
-    -D %(gsnap_index_dir)s
-    -d %(gsnap_index_base)s
-    --format sam
-    --genome-unk-mismatch 0
-    --ignore-trim-in-filtering 1
-    %(infile)s
-    -o %(tmp_file_sam)s
-    2> %(outfile)s.log;
-    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
-    ''' % locals()
-
-    job_options = PARAMS['cluster_options'] + " -t 2:00:00"
-    job_condaenv=PARAMS['conda_base_env']
-
-    P.run(statement)
-
-    CompareTrnaSeq.keep_random_alignment(tmp_file_sam, tmp_file_single_sam, outfile, submit=True, job_options=job_options)
-
-    os.unlink(tmp_file_sam)
-    os.unlink(tmp_file_single_sam)
-
-
-@mkdir('mut_trunc_sig.dir')
-@transform(SEQUENCEFILES,
-           SEQUENCEFILES_REGEX,
-           add_inputs(mergeNucMtSequences),
-           r"mut_trunc_sig.dir/\2_SHRiMPReportSingle.bam")
-def mapWithSHRiMP2SingleReport(infiles, outfile):
-    '''
-    Map reads to the tRNA sequences, reporting only one alignment per read
-    '''
-    infile, trna_sequences = infiles
-
-    tmp_file_fasta = P.get_temp_filename()
-    tmp_file_sam = P.get_temp_filename()
-    tmp_file_single_sam = P.get_temp_filename()
-
-    job_threads = PARAMS['shrimp_threads']
-
-    # Need to convert fastq to fasta for SHRiMP
-    statement = '''
-    zcat < %(infile)s |
-    sed 's/^@//g'|
-    paste - - - - |
-    awk 'BEGIN { FS="\\t" } {print ">"$1"\\n"$2}' >
-    %(tmp_file_fasta)s;
-
-    gmapper
-    %(tmp_file_fasta)s
-    %(trna_sequences)s
-    -N %(job_threads)s
-    --strata  --report 1000
-    --sam-unaligned
-    --mode mirna
-    > %(tmp_file_sam)s
-    2> %(outfile)s.log ;
-    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
-    ''' % locals()
-
-    job_options = PARAMS['cluster_options'] + " -t 3:00:00"
-    job_condaenv=PARAMS['conda_base_env']
-
-    P.run(statement)
-
-    CompareTrnaSeq.keep_random_alignment(tmp_file_sam, tmp_file_single_sam, outfile)
-
-    os.unlink(tmp_file_fasta)
-    os.unlink(tmp_file_sam)
-    os.unlink(tmp_file_single_sam)
-
-
-# Not run
-@mkdir('mut_trunc_sig.dir')
-@transform(SEQUENCEFILES,
-           SEQUENCEFILES_REGEX,
-           add_inputs(buildSegemehlIndex, mergeNucMtSequences),
-           r"mut_trunc_sig.dir/\2_SegemehlReportSingle.bam")
-def mapWithSegemehlSingleReport(infiles, outfile):
-    '''
-    Map reads to the tRNA sequences, reporting only one alignment per read
-    '''
-
-    infile, segemehl_index, trna_fasta = infiles
-
-    tmp_file = P.get_temp_filename()
-
-    statement = '''
-    segemehl.x
-    -A 85 -E 500 -r 1
-    -i %(segemehl_index)s
-    -d %(trna_fasta)s
-    -q %(infile)s
-    > %(tmp_file)s
-    2> %(outfile)s.log;
-    samtools flagstat %(tmp_file)s > %(outfile)s.flagstat;
-    samtools sort -o %(outfile)s -O BAM %(tmp_file)s;
-    samtools index %(outfile)s;
-    rm -f %(tmp_file)s
-    ''' % locals()
-
-    job_options = PARAMS['cluster_options'] + " -t 5:00:00"
-    job_condaenv=PARAMS['conda_base_env']
-
-    P.run(statement)
-
-
-#@collate((mapWithBWAMEMSingleReport,
-#          mapWithBowtie2SingleReport,
-#          mapWithSHRiMP2SingleReport),
 @collate((mapWithBWAMEMSingleReport,
           mapWithBowtie2SingleReport),
-       regex('mut_trunc_sig.dir/(\S+)_(bwaMemReportSingle|bowtie2ReportSingle|SHRiMPReportSingle).bam'),
+       regex('mut_trunc_sig.dir/(\S+)_(bwaMemReportSingle|bowtie2ReportSingle).bam'),
        r'mut_trunc_sig.dir/\1.merged.bam')
 def mergeSingleReports(infiles, outfile):
 
@@ -648,9 +488,6 @@ def mergeSingleReports(infiles, outfile):
     P.run(statement)
 
 
-#@transform((mapWithBWAMEMSingleReport,
-#            mapWithBowtie2SingleReport,
-#            mapWithSHRiMP2SingleReport,),
 @transform((mapWithBWAMEMSingleReport,
             mapWithBowtie2SingleReport),
            suffix('.bam'),
@@ -749,7 +586,6 @@ def mergeMutationProfileModomics(infiles, outfiles):
 # simulate reads
 ###################################################
 
-@follows(defineCommonGenesPerMethod)
 @mkdir('simulations.dir')
 @transform(SEQUENCEFILES,
            SEQUENCEFILES_REGEX,
@@ -986,52 +822,12 @@ def alignWithSHRiMP(infiles, outfile):
     os.unlink(tmp_file_sam)
 
 
-@mkdir('quant.dir')
-@transform((simulation_null,
-            simulation_uniform,
-            simulation_realistic),
-           regex('simulations.dir/(\S+).(simulation_\S+).fastq.gz'),
-           add_inputs(buildGSNAPIndex),
-           r'quant.dir/\1.\2.gsnap.bam')
-def alignWithGSNAP(infiles, outfile):
-
-    infile, gsnap_index = infiles
-
-    gsnap_index_dir = os.path.dirname(gsnap_index)
-    gsnap_index_base = os.path.basename(gsnap_index)
-
-    tmp_file = P.get_temp_filename()
-
-    statement = '''
-    gsnap
-    --gunzip
-    -D %(gsnap_index_dir)s
-    -d %(gsnap_index_base)s
-    --format sam
-    --genome-unk-mismatch 0
-    --ignore-trim-in-filtering 1
-    %(infile)s
-    -o %(tmp_file_sam)s
-    2> %(outfile)s.log;
-    samtools flagstat %(tmp_file_sam)s > %(outfile)s.flagstat;
-    ''' % locals()
-
-    job_options = PARAMS['cluster_options'] + " -t 4:00:00"
-    job_condaenv=PARAMS['conda_base_env']
-
-    P.run(statement)
-
-    CompareTrnaSeq.filter_sam(tmp_file, outfile, submit=True, job_options=job_options)
-
-    os.unlink(tmp_file)
-
 ###################################################
 # quantify
 ###################################################
 
-#@transform((alignWithBowtie2,
-#            alignWithSHRiMP),
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_decision.individual',
            r'quant.dir/\1.\2.\3.gene_count_decision.isodecoder',
@@ -1051,7 +847,8 @@ def quantDiscreteCounts(infile, outfiles):
         submit=True,
         job_options=job_options)
 
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_fractional.individual',
            r'quant.dir/\1.\2.\3.gene_count_fractional.isodecoder',
@@ -1096,7 +893,8 @@ def quantDiscreteCountsMAPQ10(infile, outfiles):
          job_options=job_options)
 
 
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_no_multi.individual',
            r'quant.dir/\1.\2.\3.gene_count_no_multi.isodecoder',
@@ -1117,7 +915,8 @@ def quantDiscreteCountsNoMultimapping(infile, outfiles):
         submit=True,
      job_options=job_options)
 
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            [r'quant.dir/\1.\2.\3.gene_count_random_single.individual',
            r'quant.dir/\1.\2.\3.gene_count_random_single.isodecoder',
@@ -1139,7 +938,8 @@ def quantDiscreteCountsRandomSingle(infile, outfiles):
      job_options=job_options)
 
 
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+).(simulation_\S+)\.(\S+).bam'),
            add_inputs(mergeNucMtSequences),
            r'quant.dir/\1.\2.\3/quant.sf')
@@ -1156,9 +956,12 @@ def quantWithSalmon(infiles, outfile):
     salmon quant -t
     %(trna_fasta)s
     -l A
+    -p 6
     -a %(infile)s
     -o %(outfile_dir)s;
     '''
+    
+    job_threads = 6
     job_options = PARAMS['cluster_options'] + " -t 2:00:00"
     job_condaenv=PARAMS['conda_base_env']
 
@@ -1168,7 +971,7 @@ def quantWithSalmon(infiles, outfile):
 @follows(quantWithSalmon) # avoid mimseq running alongside salmon! (only needed for non-HPC runs)
 @jobs_limit(PARAMS['mimseq_max_sim_tasks'])
 @mkdir('mimseq.dir')
-@collate((simulation_uniform, simulation_realistic, simulation_null),
+@collate((simulation_uniform, simulation_realistic),
          regex('simulations.dir/(\S+?)_(\S+).(simulation_\S+).fastq.gz'),
          add_inputs(filterNucFasta, filterMtFasta),
          r'mimseq.dir/\1_\3/counts/Anticodon_counts_raw.txt')
@@ -1215,6 +1018,7 @@ def quantWithMimSeq(infiles, outfile):
     --max-multi 4
     --remap
     --remap-mismatches 0.05
+    --local-modomics
     %(tmp_sample_data)s
     > %(tmp_stdouterr)s
     2>&1;
@@ -1224,14 +1028,14 @@ def quantWithMimSeq(infiles, outfile):
     mv %(tmp_stdouterr)s %(outdir)s/stdout_stderr
     ''' % locals()
 
-    job_options = PARAMS['cluster_options'] + " -t 15:00:00"
+    job_options = PARAMS['cluster_options'] + " -t 23:00:00"
     job_condaenv=PARAMS['mimseq_conda_env_name']
 
     P.run(statement)
 
 
 #####################################################
-# concatenate quantification estiamtes from real data
+# concatenate quantification estimates from real data
 #####################################################
 
 @mkdir('final_results.dir')
@@ -1373,13 +1177,14 @@ def makeMimseqIsodecoderQuant(infiles, outfile):
     job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.makeMimseqIsodecoderQuant(infile, mapping_file, outfile, submit=True,  job_options=job_options)
-# Function to merge comparisons for decision, salmon-based and mimseq quant
+
 
 #####################################################
 # Summary of multiple mapping and agreement wit truth
 #####################################################
 @mkdir('multiple_mapped_summary.dir')
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
            r'multiple_mapped_summary.dir/\1_\2.\3.\4.tsv')
 def summariseMultimappedTruth2Assignment(infile, outfile):
@@ -1410,7 +1215,8 @@ def mergeSummariseMultimapped(infiles, outfile):
 
 @follows(compareTruthEstimateMimseq)
 @mkdir('truth2assignment.dir')
-@transform(alignWithBowtie2,
+@transform((alignWithBowtie2,
+            alignWithSHRiMP),
            regex('quant.dir/(\S+?)_(\S+).(simulation_uniform|simulation_realistic)\.(\S+).bam'),
            add_inputs(r'mimseq.dir/\1.\3.MimseqCompareTruthEstimateMimseqIsodecoder.tsv.mapping'),
                r'truth2assignment.dir/\1_\2.\3.\4.truth2assignment.tsv')
@@ -1442,7 +1248,7 @@ def getTruth2AssignmentMimSeq(infiles, outfile):
     job_condaenv=PARAMS['conda_base_env']
 
     CompareTrnaSeq.getTruth2AssignmentMimSeq(
-        infile, mimseq_isodecoder_counts, outfile, isodecoder_mapping, submit=True, job_options=job_options)
+        infile, mimseq_isodecoder_counts, isodecoder_mapping, outfile, submit=True, job_options=job_options)
 
 @mkdir('final_results.dir')
 @collate((getTruth2Assignment, getTruth2AssignmentMimSeq),
@@ -1519,10 +1325,20 @@ def quantifyReal():
     pass
 
 
+@follows(mergeSummariseMultimapped,
+         combineMultimappingTallies,
+         plotMultimappingHeatmaps)
+def multimapping():
+    ''' Summarise the multimapping of tRNA-Seq reads
+    '''
+    pass
+
+
 @follows(quantifyReal,
          summariseAlignments,
          quant,
-         compare)
+         compare,
+         multimapping)
 def full():
     'run it all'
     pass
